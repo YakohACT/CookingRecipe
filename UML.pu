@@ -1,0 +1,65 @@
+@startuml
+
+enum IngredientCategory {
+  VEGETABLE
+  MEAT
+  SEAFOOD
+  CARBOHYDRATE
+  MILK
+  OTHER
+  SEASONING
+}
+
+class IngredientMaster {
+  - database: HashMap<Ingredient, String>
+  + IngredientMaster()
+  - loadCsv(): void
+  + getDatabase(): HashMap<Ingredient, String>
+  + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
+  + getAllIngredients(): ArrayList<Ingredient>
+}
+
+class Ingredient {
+  - name: String
+  - category: IngredientCategory
+  + Ingredient(name: String, category: IngredientCategory)
+  + getName(): String
+  + getCategory(): IngredientCategory
+  + toString(): String
+  + equals(o: Object): boolean
+  + hashCode(): int
+}
+
+class Recipe {
+  - title: String
+  - url: String
+  - ingredients: ArrayList<Ingredient>
+  + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>)
+  + getTitle(): String
+  + setTitle(title: String): void
+  + getUrl(): String
+  + setUrl(url: String): void
+  + getIngredients(): ArrayList<Ingredient>
+  + setIngredients(ingredients: ArrayList<Ingredient>): void
+  + addIngredients(ingredient: Ingredient): void
+  + deleteIngredients(ingredient: Ingredient): void
+}
+
+class AllRecipeList {
+  - recipeList: ArrayList<Recipe>
+  - FILE_NAME: String
+  + AllRecipeList()
+  + getRecipeList(): ArrayList<Recipe>
+  + addRecipe(recipe: Recipe): void
+  + deleteRecipe(id: int): void
+  + changeRecipe(id: int, recipe: Recipe): void
+  + read(): void
+  + write(): void
+}
+
+IngredientMaster "1" *-- "many" Ingredient : contains
+Ingredient "many" -- "1" IngredientCategory : has category
+Recipe "many" -- "many" Ingredient : uses
+AllRecipeList "1" *-- "many" Recipe : contains
+
+@enduml
