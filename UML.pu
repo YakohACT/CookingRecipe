@@ -1,65 +1,68 @@
 @startuml
+skinparam ClassAttributeIconSize 0
 
 enum IngredientCategory {
-  VEGETABLE
-  MEAT
-  SEAFOOD
-  CARBOHYDRATE
-  MILK
-  OTHER
-  SEASONING
-}
-
-class IngredientMaster {
-  - database: HashMap<Ingredient, String>
-  + IngredientMaster()
-  - loadCsv(): void
-  + getDatabase(): HashMap<Ingredient, String>
-  + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
-  + getAllIngredients(): ArrayList<Ingredient>
+    VEGETABLE
+    MEAT
+    SEAFOOD
+    CARBOHYDRATE
+    MILK
+    OTHER
+    SEASONING
 }
 
 class Ingredient {
-  - name: String
-  - category: IngredientCategory
-  + Ingredient(name: String, category: IngredientCategory)
-  + getName(): String
-  + getCategory(): IngredientCategory
-  + toString(): String
-  + equals(o: Object): boolean
-  + hashCode(): int
+    - name: String
+    - category: IngredientCategory
+    + getName(): String
+    + getCategory(): IngredientCategory
 }
 
 class Recipe {
-  - title: String
-  - url: String
-  - ingredients: ArrayList<Ingredient>
-  + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>)
-  + getTitle(): String
-  + setTitle(title: String): void
-  + getUrl(): String
-  + setUrl(url: String): void
-  + getIngredients(): ArrayList<Ingredient>
-  + setIngredients(ingredients: ArrayList<Ingredient>): void
-  + addIngredients(ingredient: Ingredient): void
-  + deleteIngredients(ingredient: Ingredient): void
+    - title: String
+    - url: String
+    - ingredients: ArrayList<Ingredient>
+    + getTitle(): String
+    + getUrl(): String
+    + getIngredients(): ArrayList<Ingredient>
+}
+
+class IngredientMaster {
+    - database: HashMap<Ingredient, String>
+    + loadCsv(): void
+    + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
+    + getAllIngredients(): ArrayList<Ingredient>
 }
 
 class AllRecipeList {
-  - recipeList: ArrayList<Recipe>
-  - FILE_NAME: String
-  + AllRecipeList()
-  + getRecipeList(): ArrayList<Recipe>
-  + addRecipe(recipe: Recipe): void
-  + deleteRecipe(id: int): void
-  + changeRecipe(id: int, recipe: Recipe): void
-  + read(): void
-  + write(): void
+    - recipeList: ArrayList<Recipe>
+    + addRecipe(recipe: Recipe): void
+    + read(): void
+    + write(): void
 }
 
-IngredientMaster "1" *-- "many" Ingredient : contains
-Ingredient "many" -- "1" IngredientCategory : has category
-Recipe "many" -- "many" Ingredient : uses
-AllRecipeList "1" *-- "many" Recipe : contains
+class RecipeAIService {
+    - API_URL: String
+    - MODEL_NAME: String
+    + suggestRecipe(allIngredients: ArrayList<Ingredient>): String[]
+    - parseResponse(json: String): String[]
+}
+
+class SwingMain {
+    - allRecipeList: AllRecipeList
+    - ingredientMaster: IngredientMaster
+    - centerPanel: JPanel
+    + showRegisterForm(): void
+    + showViewMenu(): void
+}
+
+' 関係性の定義
+SwingMain --> AllRecipeList
+SwingMain --> IngredientMaster
+SwingMain ..> RecipeAIService : uses
+AllRecipeList "1" *-- "many" Recipe
+Recipe "many" o-- "many" Ingredient
+Ingredient "many" -- "1" IngredientCategory
+IngredientMaster "1" *-- "many" Ingredient
 
 @enduml
