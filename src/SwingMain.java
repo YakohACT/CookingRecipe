@@ -5,6 +5,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
+import javax.swing.SwingWorker;
 
 /**
  * レシピ管理システムのUIを管理するSwing用メインクラス
@@ -112,7 +113,7 @@ public class SwingMain extends JFrame {
     }
 
     /**
-     * 入力チェック機能付き登録フォームの表示
+     * 入力チェック機能とAI提案機能付きの登録フォームの表示
      */
     private void showRegisterForm() {
         centerPanel.removeAll();
@@ -122,9 +123,23 @@ public class SwingMain extends JFrame {
         form.setBackground(Color.WHITE);
         form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
+        // --- タイトルとAIボタンのエリア ---
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(Color.WHITE);
+        headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         JLabel titleLabel = new JLabel("新規レシピ登録");
         titleLabel.setFont(FONT_TITLE);
-        addLeftAligned(form, titleLabel);
+        headerPanel.add(titleLabel, BorderLayout.WEST);
+
+        JButton btnAi = new JButton("✨ AIで自動提案");
+        btnAi.setBackground(new Color(155, 89, 182)); // AIらしい紫色
+        btnAi.setForeground(Color.WHITE);
+        btnAi.setOpaque(true);
+        btnAi.setBorderPainted(false);
+        headerPanel.add(btnDelStyle(btnAi), BorderLayout.EAST);
+
+        form.add(headerPanel);
         form.add(Box.createRigidArea(new Dimension(0, 20)));
 
         JTextField titleField = createStyledTextField();
@@ -132,7 +147,6 @@ public class SwingMain extends JFrame {
 
         JComboBox<IngredientCategory> catCombo = new JComboBox<>(IngredientCategory.values());
         catCombo.setFont(FONT_MAIN);
-        // セレクトボックス縦幅の固定
         catCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
 
         DefaultListModel<Ingredient> masterListModel = new DefaultListModel<>();
@@ -159,23 +173,61 @@ public class SwingMain extends JFrame {
             }
         });
 
+        // --- AIボタンのアクション定義 ---
+        btnAi.addActionListener(e -> {
+            btnAi.setText("生成中...");
+            btnAi.setEnabled(false);
+
+            // 通信中に画面がフリーズしないよう、別スレッド(SwingWorker)で処理を実行する
+            SwingWorker<String[], Void> worker = new SwingWorker<String[], Void>() {
+                @Override
+                protected String[] doInBackground() throws Exception {
+                    RecipeAIService aiService = new RecipeAIService();
+                    return aiService.suggestRecipe(ingredientMaster.getAllIngredients());
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        String[] result = get();
+                        titleField.setText(result[0]); // タイトルの自動入力
+
+                        selectedListModel.clear(); // 現在の選択をクリア
+
+                        // AIが提案した食材名と、マスターデータを照合して自動追加
+                        String[] aiIngs = result[1].split(",");
+                        for (String aiIngName : aiIngs) {
+                            String cleanName = aiIngName.trim();
+                            for (Ingredient ing : ingredientMaster.getAllIngredients()) {
+                                if (ing.getName().equals(cleanName) && !selectedListModel.contains(ing)) {
+                                    selectedListModel.addElement(ing);
+                                }
+                            }
+                        }
+                        JOptionPane.showMessageDialog(SwingMain.this, "AIがレシピを提案しました！内容を確認してください", "AI提案完了", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(SwingMain.this, "AIの呼び出しに失敗しました。\nOllamaが起動しているか確認してください。", "エラー", JOptionPane.ERROR_MESSAGE);
+                    } finally {
+                        btnAi.setText("✨ AIで自動提案");
+                        btnAi.setEnabled(true);
+                    }
+                }
+            };
+            worker.execute();
+        });
+
         JButton btnSubmit = new JButton("レシピを保存");
         btnSubmit.setBackground(COLOR_PRIMARY);
         btnSubmit.setForeground(Color.WHITE);
         btnSubmit.setOpaque(true);
         btnSubmit.setBorderPainted(false);
 
-        // 保存ボタンのアクション定義
         btnSubmit.addActionListener(e -> {
             String title = titleField.getText().trim();
             String url = urlField.getText().trim();
 
-            // バリデーションチェック
             if (title.isEmpty() || url.isEmpty() || selectedListModel.isEmpty()) {
-                JOptionPane.showMessageDialog(this,
-                        "入力されていない箇所があります",
-                        "入力エラー",
-                        JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "入力されていない箇所があります", "入力エラー", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -186,10 +238,11 @@ public class SwingMain extends JFrame {
             showWelcomeMessage();
         });
 
+        // コンポーネントの配置
         addLeftAligned(form, new JLabel("タイトル:"));
         addLeftAligned(form, titleField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
-        addLeftAligned(form, new JLabel("URL:"));
+        addLeftAligned(form, new JLabel("URL (AI生成時は手動入力):"));
         addLeftAligned(form, urlField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
         addLeftAligned(form, new JLabel("カテゴリから食材を選択:"));
@@ -201,7 +254,7 @@ public class SwingMain extends JFrame {
         addLeftAligned(form, btnAdd);
 
         form.add(Box.createRigidArea(new Dimension(0, 20)));
-        addLeftAligned(form, new JLabel("追加された食材:"));
+        addLeftAligned(form, new JLabel("使用する食材 (AI提案食材もここに追加されます):"));
         JScrollPane sScroll = new JScrollPane(selectedIngList);
         sScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         form.add(sScroll);
@@ -211,6 +264,14 @@ public class SwingMain extends JFrame {
 
         centerPanel.add(new JScrollPane(form), BorderLayout.CENTER);
         updatePanel();
+    }
+
+    /**
+     * AIボタン等のレイアウト崩れを防ぐヘルパーメソッド
+     */
+    private JButton btnDelStyle(JButton btn) {
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
     }
 
     /**
