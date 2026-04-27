@@ -20,7 +20,7 @@ public class IngredientMaster {
      * database.csv からのデータ読み込み
      */
     private void loadCsv() {
-        File file = new File("database.csv");
+        File file = new File("CookingRecipe/database.csv");
         if (!file.exists()) return;
 
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {

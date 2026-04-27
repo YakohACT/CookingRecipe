@@ -7,183 +7,505 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
- * レシピ管理システムのGUIメインクラス
+ * レシピ管理システムのUIを管理するSwing用メインクラス
  */
 public class SwingMain extends JFrame {
     private AllRecipeList allRecipeList;
     private IngredientMaster ingredientMaster;
     private JPanel centerPanel;
 
+    // カラーテーマの定義
     private final Color COLOR_PRIMARY = new Color(52, 152, 219);
+    private final Color COLOR_BG = new Color(245, 247, 250);
     private final Color COLOR_SIDE = new Color(44, 62, 80);
+    private final Color COLOR_TEXT_LIGHT = Color.WHITE;
     private final Font FONT_MAIN = new Font("SansSerif", Font.PLAIN, 14);
     private final Font FONT_TITLE = new Font("SansSerif", Font.BOLD, 18);
 
+    /**
+     * GUIの初期構築を行うコンストラクタ
+     */
     public SwingMain() {
         allRecipeList = new AllRecipeList();
         ingredientMaster = new IngredientMaster();
 
         setTitle("Recipe Manager Pro");
         setSize(1000, 750);
+
+        // バツボタンを押した際の動作（保存してから終了）
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
+            @Override
             public void windowClosing(WindowEvent e) {
                 allRecipeList.write();
                 System.exit(0);
             }
         });
 
+        // サイドメニューの構築
         JPanel sideMenu = new JPanel();
         sideMenu.setLayout(new BoxLayout(sideMenu, BoxLayout.Y_AXIS));
         sideMenu.setBackground(COLOR_SIDE);
         sideMenu.setPreferredSize(new Dimension(200, 0));
         sideMenu.setBorder(new EmptyBorder(30, 10, 10, 10));
 
+        JLabel menuTitle = new JLabel("MENU");
+        menuTitle.setForeground(COLOR_TEXT_LIGHT);
+        menuTitle.setFont(FONT_TITLE);
+        menuTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        sideMenu.add(menuTitle);
+        sideMenu.add(Box.createRigidArea(new Dimension(0, 30)));
+
         addSideButton(sideMenu, "レシピ登録", e -> showRegisterForm());
         addSideButton(sideMenu, "レシピ閲覧", e -> showViewMenu());
         addSideButton(sideMenu, "レシピ削除", e -> showDeleteForm());
+
         sideMenu.add(Box.createVerticalGlue());
-        addSideButton(sideMenu, "保存して終了", e -> { allRecipeList.write(); System.exit(0); });
+        addSideButton(sideMenu, "保存して終了", e -> {
+            allRecipeList.write();
+            System.exit(0);
+        });
 
         add(sideMenu, BorderLayout.WEST);
+
+        // 中央パネルの設定
         centerPanel = new JPanel(new BorderLayout());
+        centerPanel.setBackground(COLOR_BG);
         add(centerPanel, BorderLayout.CENTER);
+
         showWelcomeMessage();
     }
 
-    private void addSideButton(JPanel p, String t, java.awt.event.ActionListener a) {
-        JButton b = new JButton(t);
-        b.setMaximumSize(new Dimension(180, 40));
-        b.setAlignmentX(Component.CENTER_ALIGNMENT);
-        b.setBackground(COLOR_SIDE);
-        b.setForeground(Color.WHITE);
-        b.setOpaque(true);
-        b.setBorderPainted(false);
-        b.addActionListener(a);
-        p.add(b);
-        p.add(Box.createRigidArea(new Dimension(0, 10)));
+    /**
+     * サイドメニュー用ボタンの追加
+     * @param parent 追加先パネル
+     * @param text ボタンのテキスト
+     * @param action クリック時のアクション
+     */
+    private void addSideButton(JPanel parent, String text, java.awt.event.ActionListener action) {
+        JButton btn = new JButton(text);
+        btn.setMaximumSize(new Dimension(180, 40));
+        btn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btn.setFocusPainted(false);
+        btn.setBackground(COLOR_SIDE);
+        btn.setForeground(COLOR_TEXT_LIGHT);
+        btn.setFont(FONT_MAIN);
+        btn.setBorderPainted(false);
+        btn.setOpaque(true);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.addActionListener(action);
+
+        parent.add(btn);
+        parent.add(Box.createRigidArea(new Dimension(0, 10)));
     }
 
+    /**
+     * 初期画面の表示
+     */
     private void showWelcomeMessage() {
         centerPanel.removeAll();
-        JLabel l = new JLabel("<html><center>Welcome!<br>操作を選択してください</center></html>", SwingConstants.CENTER);
-        l.setFont(FONT_TITLE);
-        centerPanel.add(l, BorderLayout.CENTER);
+        JLabel label = new JLabel("<html><center>Welcome!<br>操作を選択してください</center></html>", SwingConstants.CENTER);
+        label.setFont(FONT_TITLE);
+        centerPanel.add(label, BorderLayout.CENTER);
         updatePanel();
     }
 
+    /**
+     * AI機能・入力チェック付き登録フォームの表示
+     */
     private void showRegisterForm() {
         centerPanel.removeAll();
-        JPanel f = new JPanel(); f.setLayout(new BoxLayout(f, BoxLayout.Y_AXIS));
-        f.setBorder(new EmptyBorder(30, 50, 30, 50));
-        f.setBackground(Color.WHITE);
 
-        JPanel h = new JPanel(new BorderLayout()); h.setBackground(Color.WHITE);
-        JLabel l = new JLabel("新規レシピ登録"); l.setFont(FONT_TITLE); h.add(l, BorderLayout.WEST);
-        JButton ai = new JButton("✨ AI自動提案"); ai.setBackground(new Color(155, 89, 182)); ai.setForeground(Color.WHITE);
-        ai.setOpaque(true); ai.setBorderPainted(false); h.add(ai, BorderLayout.EAST);
-        addLeftAligned(f, h);
+        JPanel form = new JPanel();
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
+        form.setBackground(Color.WHITE);
+        form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
-        JTextField tf = createField(); JTextField uf = createField();
-        DefaultListModel<Ingredient> sm = new DefaultListModel<>(); JList<Ingredient> sl = new JList<>(sm);
-        DefaultListModel<Ingredient> mm = new DefaultListModel<>(); JList<Ingredient> ml = new JList<>(mm);
-        JComboBox<IngredientCategory> cb = new JComboBox<>(IngredientCategory.values());
-        cb.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-        cb.addActionListener(e -> {
-            mm.clear();
-            for(Ingredient i : ingredientMaster.searchIngredient((IngredientCategory)cb.getSelectedItem())) mm.addElement(i);
+        // --- タイトルとAIボタンのエリア ---
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(Color.WHITE);
+        headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel titleLabel = new JLabel("新規レシピ登録");
+        titleLabel.setFont(FONT_TITLE);
+        headerPanel.add(titleLabel, BorderLayout.WEST);
+
+        JButton btnAi = new JButton("✨ AI自動提案");
+        btnAi.setBackground(new Color(155, 89, 182));
+        btnAi.setForeground(Color.WHITE);
+        btnAi.setOpaque(true);
+        btnAi.setBorderPainted(false);
+        btnAi.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        headerPanel.add(btnAi, BorderLayout.EAST);
+
+        form.add(headerPanel);
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        JTextField titleField = createStyledTextField();
+        JTextField urlField = createStyledTextField();
+
+        JComboBox<IngredientCategory> catCombo = new JComboBox<>(IngredientCategory.values());
+        catCombo.setFont(FONT_MAIN);
+        catCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+
+        DefaultListModel<Ingredient> masterListModel = new DefaultListModel<>();
+        JList<Ingredient> masterIngList = new JList<>(masterListModel);
+
+        DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
+        JList<Ingredient> selectedIngList = new JList<>(selectedListModel);
+
+        catCombo.addActionListener(e -> {
+            IngredientCategory cat = (IngredientCategory) catCombo.getSelectedItem();
+            masterListModel.clear();
+            if (cat != null) {
+                for (Ingredient ing : ingredientMaster.searchIngredient(cat)) {
+                    masterListModel.addElement(ing);
+                }
+            }
         });
 
-        ai.addActionListener(e -> {
-            ai.setText("生成中..."); ai.setEnabled(false);
-            new SwingWorker<String[], Void>() {
-                protected String[] doInBackground() throws Exception { return new RecipeAIService().suggestRecipe(ingredientMaster.getAllIngredients()); }
+        JButton btnAdd = new JButton("選択した食材を追加");
+        btnAdd.addActionListener(e -> {
+            Ingredient selected = masterIngList.getSelectedValue();
+            if (selected != null && !selectedListModel.contains(selected)) {
+                selectedListModel.addElement(selected);
+            }
+        });
+
+        // --- AIボタンのアクション ---
+        btnAi.addActionListener(e -> {
+            btnAi.setText("生成中...");
+            btnAi.setEnabled(false);
+
+            SwingWorker<String[], Void> worker = new SwingWorker<String[], Void>() {
+                @Override
+                protected String[] doInBackground() throws Exception {
+                    RecipeAIService aiService = new RecipeAIService();
+                    return aiService.suggestRecipe(ingredientMaster.getAllIngredients());
+                }
+
+                @Override
                 protected void done() {
                     try {
-                        String[] r = get(); tf.setText(r[0]); sm.clear();
-                        for(String n : r[1].split(",")) {
-                            for(Ingredient i : ingredientMaster.getAllIngredients()) if(i.getName().equals(n.trim())) sm.addElement(i);
+                        String[] result = get();
+                        titleField.setText(result[0]);
+                        selectedListModel.clear();
+
+                        String[] aiIngs = result[1].split(",");
+                        for (String aiIngName : aiIngs) {
+                            String cleanName = aiIngName.trim();
+                            for (Ingredient ing : ingredientMaster.getAllIngredients()) {
+                                if (ing.getName().equals(cleanName) && !selectedListModel.contains(ing)) {
+                                    selectedListModel.addElement(ing);
+                                }
+                            }
                         }
-                    } catch(Exception ex) { JOptionPane.showMessageDialog(null, "AI連携失敗"); }
-                    ai.setText("✨ AI自動提案"); ai.setEnabled(true);
+                        JOptionPane.showMessageDialog(SwingMain.this, "AIがレシピを提案しました", "提案完了", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(SwingMain.this, "AI連携に失敗しました", "エラー", JOptionPane.ERROR_MESSAGE);
+                    } finally {
+                        btnAi.setText("✨ AI自動提案");
+                        btnAi.setEnabled(true);
+                    }
                 }
-            }.execute();
+            };
+            worker.execute();
         });
 
-        JButton sub = new JButton("レシピを保存"); sub.setBackground(COLOR_PRIMARY); sub.setForeground(Color.WHITE);
-        sub.setOpaque(true); sub.setBorderPainted(false);
-        sub.addActionListener(e -> {
-            if(tf.getText().isEmpty() || sm.isEmpty()) { JOptionPane.showMessageDialog(null, "入力されていない箇所があります"); return; }
+        JButton btnSubmit = new JButton("レシピを保存");
+        btnSubmit.setBackground(COLOR_PRIMARY);
+        btnSubmit.setForeground(Color.WHITE);
+        btnSubmit.setOpaque(true);
+        btnSubmit.setBorderPainted(false);
+
+        btnSubmit.addActionListener(e -> {
+            String title = titleField.getText().trim();
+            String url = urlField.getText().trim();
+
+            // バリデーションチェック
+            if (title.isEmpty() || url.isEmpty() || selectedListModel.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "入力されていない箇所があります", "入力エラー", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
             ArrayList<Ingredient> ings = new ArrayList<>();
-            for(int i=0; i<sm.size(); i++) ings.add(sm.getElementAt(i));
-            allRecipeList.addRecipe(new Recipe(tf.getText(), uf.getText(), ings));
+            for (int i = 0; i < selectedListModel.size(); i++) ings.add(selectedListModel.getElementAt(i));
+            allRecipeList.addRecipe(new Recipe(title, url, ings));
+            JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
             showWelcomeMessage();
         });
 
-        addLeftAligned(f, new JLabel("タイトル:")); addLeftAligned(f, tf);
-        addLeftAligned(f, new JLabel("URL:")); addLeftAligned(f, uf);
-        addLeftAligned(f, new JLabel("食材選択:")); addLeftAligned(f, cb);
-        f.add(new JScrollPane(ml));
-        JButton addBtn = new JButton("追加"); addBtn.addActionListener(e -> { if(ml.getSelectedValue()!=null) sm.addElement(ml.getSelectedValue()); });
-        addLeftAligned(f, addBtn);
-        addLeftAligned(f, new JLabel("追加済み食材:")); f.add(new JScrollPane(sl));
-        addLeftAligned(f, sub);
+        // コンポーネントの配置
+        addLeftAligned(form, new JLabel("タイトル:"));
+        addLeftAligned(form, titleField);
+        form.add(Box.createRigidArea(new Dimension(0, 10)));
+        addLeftAligned(form, new JLabel("URL (AI生成時は手動で入力してください):"));
+        addLeftAligned(form, urlField);
+        form.add(Box.createRigidArea(new Dimension(0, 10)));
+        addLeftAligned(form, new JLabel("カテゴリから食材を選択:"));
+        addLeftAligned(form, catCombo);
 
-        centerPanel.add(new JScrollPane(f));
+        JScrollPane mScroll = new JScrollPane(masterIngList);
+        mScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        form.add(mScroll);
+        addLeftAligned(form, btnAdd);
+
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+        addLeftAligned(form, new JLabel("使用する食材:"));
+        JScrollPane sScroll = new JScrollPane(selectedIngList);
+        sScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        form.add(sScroll);
+
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+        addLeftAligned(form, btnSubmit);
+
+        centerPanel.add(new JScrollPane(form), BorderLayout.CENTER);
         updatePanel();
     }
 
+    /**
+     * 複数検索パターンを持つ閲覧画面の表示
+     */
     private void showViewMenu() {
         centerPanel.removeAll();
-        JTabbedPane t = new JTabbedPane();
-        JPanel p1 = new JPanel(new BorderLayout(10,10));
-        DefaultListModel<Recipe> m = new DefaultListModel<>();
-        for(Recipe r : allRecipeList.getRecipeList()) m.addElement(r);
-        JList<Recipe> l = createList(m); JTextArea d = createArea();
-        l.addListSelectionListener(e -> { if(l.getSelectedValue()!=null) updateArea(d, l.getSelectedValue()); });
-        p1.add(new JScrollPane(l), BorderLayout.WEST); p1.add(new JScrollPane(d), BorderLayout.CENTER);
-        t.addTab("タイトルから検索", p1);
-        centerPanel.add(t); updatePanel();
-    }
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setFont(FONT_MAIN);
 
-    private void showDeleteForm() {
-        centerPanel.removeAll();
-        JPanel p = new JPanel(new BorderLayout(10,10));
-        DefaultListModel<Recipe> m = new DefaultListModel<>();
-        for(Recipe r : allRecipeList.getRecipeList()) m.addElement(r);
-        JList<Recipe> l = createList(m);
-        JButton b = new JButton("選択したレシピを削除"); b.setBackground(Color.RED); b.setForeground(Color.WHITE);
-        b.setOpaque(true); b.setBorderPainted(false);
-        b.addActionListener(e -> {
-            if(l.getSelectedValue()!=null && JOptionPane.showConfirmDialog(null, "削除しますか？")==0) {
-                allRecipeList.getRecipeList().remove(l.getSelectedValue()); m.removeElement(l.getSelectedValue());
+        // --- タブ1: タイトルからの検索 ---
+        JPanel titleTab = new JPanel(new BorderLayout(20, 20));
+        titleTab.setBorder(new EmptyBorder(20, 20, 20, 20));
+        titleTab.setBackground(Color.WHITE);
+
+        DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
+        for (Recipe r : allRecipeList.getRecipeList()) recipeListModel.addElement(r);
+
+        JList<Recipe> recipeListView = createStyledRecipeList(recipeListModel);
+        JTextArea detailArea = createDetailArea();
+
+        recipeListView.addListSelectionListener(e -> {
+            Recipe selected = recipeListView.getSelectedValue();
+            if (selected != null) updateDetailArea(detailArea, selected);
+        });
+
+        titleTab.add(new JScrollPane(recipeListView), BorderLayout.WEST);
+        titleTab.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+
+        // --- タブ2: 食材からの検索 (復元部分) ---
+        JPanel ingTab = new JPanel(new BorderLayout(20, 20));
+        ingTab.setBackground(Color.WHITE);
+        ingTab.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        JPanel searchToolBox = new JPanel();
+        searchToolBox.setLayout(new BoxLayout(searchToolBox, BoxLayout.Y_AXIS));
+        searchToolBox.setBackground(Color.WHITE);
+        searchToolBox.setPreferredSize(new Dimension(300, 0));
+
+        DefaultListModel<Ingredient> searchCondModel = new DefaultListModel<>();
+        JList<Ingredient> searchCondList = new JList<>(searchCondModel);
+
+        JComboBox<IngredientCategory> searchCatCombo = new JComboBox<>(IngredientCategory.values());
+        searchCatCombo.setFont(FONT_MAIN);
+        searchCatCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+
+        DefaultListModel<Ingredient> masterSearchModel = new DefaultListModel<>();
+        JList<Ingredient> masterSearchList = new JList<>(masterSearchModel);
+
+        searchCatCombo.addActionListener(e -> {
+            masterSearchModel.clear();
+            for (Ingredient ing : ingredientMaster.searchIngredient((IngredientCategory)searchCatCombo.getSelectedItem())) {
+                masterSearchModel.addElement(ing);
             }
         });
-        p.add(new JScrollPane(l), BorderLayout.CENTER); p.add(b, BorderLayout.SOUTH);
-        centerPanel.add(p); updatePanel();
-    }
 
-    private JList<Recipe> createList(DefaultListModel<Recipe> m) {
-        JList<Recipe> l = new JList<>(m);
-        l.setCellRenderer((list, val, idx, isS, f) -> {
-            JLabel lbl = new JLabel(((Recipe)val).getTitle()); lbl.setOpaque(true);
-            lbl.setBackground(isS ? COLOR_PRIMARY : Color.WHITE); lbl.setForeground(isS ? Color.WHITE : Color.BLACK);
-            lbl.setBorder(new EmptyBorder(5,10,5,10)); return lbl;
+        JButton btnAddCond = new JButton("検索条件に追加");
+        btnAddCond.addActionListener(e -> {
+            Ingredient selected = masterSearchList.getSelectedValue();
+            if (selected != null && !searchCondModel.contains(selected)) searchCondModel.addElement(selected);
         });
-        return l;
+
+        JButton btnClearCond = new JButton("条件をクリア");
+        btnClearCond.addActionListener(e -> searchCondModel.clear());
+
+        DefaultListModel<Recipe> resultListModel = new DefaultListModel<>();
+        JList<Recipe> resultListView = createStyledRecipeList(resultListModel);
+        JTextArea searchDetailArea = createDetailArea();
+
+        resultListView.addListSelectionListener(e -> {
+            Recipe selected = resultListView.getSelectedValue();
+            if (selected != null) updateDetailArea(searchDetailArea, selected);
+        });
+
+        JButton btnSearch = new JButton("この食材をすべて含むレシピを検索");
+        btnSearch.setBackground(COLOR_PRIMARY);
+        btnSearch.setForeground(Color.WHITE);
+        btnSearch.setOpaque(true);
+        btnSearch.setBorderPainted(false);
+        btnSearch.addActionListener(e -> {
+            ArrayList<Ingredient> targets = new ArrayList<>();
+            for (int i = 0; i < searchCondModel.size(); i++) targets.add(searchCondModel.getElementAt(i));
+
+            resultListModel.clear();
+            for (Recipe r : allRecipeList.getRecipeList()) {
+                if (r.getIngredients().containsAll(targets)) resultListModel.addElement(r);
+            }
+        });
+
+        addLeftAligned(searchToolBox, new JLabel("1. カテゴリ選択:"));
+        addLeftAligned(searchToolBox, searchCatCombo);
+        searchToolBox.add(new JScrollPane(masterSearchList));
+        addLeftAligned(searchToolBox, btnAddCond);
+        searchToolBox.add(Box.createRigidArea(new Dimension(0, 10)));
+        addLeftAligned(searchToolBox, new JLabel("2. 現在の検索条件:"));
+        searchToolBox.add(new JScrollPane(searchCondList));
+        addLeftAligned(searchToolBox, btnClearCond);
+        searchToolBox.add(Box.createRigidArea(new Dimension(0, 10)));
+        addLeftAligned(searchToolBox, btnSearch);
+
+        JPanel resultPanel = new JPanel(new BorderLayout(10, 10));
+        resultPanel.add(new JScrollPane(resultListView), BorderLayout.WEST);
+        resultPanel.add(new JScrollPane(searchDetailArea), BorderLayout.CENTER);
+
+        ingTab.add(searchToolBox, BorderLayout.WEST);
+        ingTab.add(resultPanel, BorderLayout.CENTER);
+
+        tabs.addTab("タイトルから検索", titleTab);
+        tabs.addTab("食材から検索", ingTab);
+        centerPanel.add(tabs, BorderLayout.CENTER);
+        updatePanel();
     }
 
-    private JTextArea createArea() { JTextArea a = new JTextArea(); a.setEditable(false); a.setMargin(new Insets(10,10,10,10)); return a; }
-    private void updateArea(JTextArea a, Recipe r) {
-        String s = r.getIngredients().stream().map(Ingredient::getName).collect(Collectors.joining(", "));
-        a.setText("タイトル: " + r.getTitle() + "\nURL: " + r.getUrl() + "\n食材: " + s);
+    /**
+     * 選択ハイライト機能付きリストの作成
+     * @param model リストモデル
+     * @return カスタマイズされたJList
+     */
+    private JList<Recipe> createStyledRecipeList(DefaultListModel<Recipe> model) {
+        JList<Recipe> list = new JList<>(model);
+        list.setCellRenderer((l, value, index, isSelected, cellHasFocus) -> {
+            JLabel label = new JLabel(value.getTitle());
+            label.setOpaque(true);
+            label.setFont(FONT_MAIN);
+            label.setBorder(new EmptyBorder(8, 15, 8, 15));
+            if (isSelected) {
+                label.setBackground(COLOR_PRIMARY);
+                label.setForeground(Color.WHITE);
+            } else {
+                label.setBackground(Color.WHITE);
+                label.setForeground(Color.BLACK);
+            }
+            return label;
+        });
+        list.setPreferredSize(new Dimension(200, 0));
+        return list;
     }
-    private JTextField createField() { JTextField f = new JTextField(); f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35)); return f; }
-    private void addLeftAligned(JPanel p, JComponent c) { c.setAlignmentX(0.0f); p.add(c); }
-    private void updatePanel() { centerPanel.revalidate(); centerPanel.repaint(); }
 
+    /**
+     * レシピ詳細表示用テキストエリアの作成
+     * @return カスタマイズされたJTextArea
+     */
+    private JTextArea createDetailArea() {
+        JTextArea area = new JTextArea();
+        area.setEditable(false);
+        area.setFont(FONT_MAIN);
+        area.setMargin(new Insets(20, 20, 20, 20));
+        return area;
+    }
+
+    /**
+     * 詳細表示エリアの内容更新
+     * @param area 更新対象のJTextArea
+     * @param recipe 表示するレシピ
+     */
+    private void updateDetailArea(JTextArea area, Recipe recipe) {
+        String ings = recipe.getIngredients().stream().map(Ingredient::getName).collect(Collectors.joining(", "));
+        area.setText("【レシピ名】\n" + recipe.getTitle() + "\n\n【URL】\n" + recipe.getUrl() + "\n\n【必要食材】\n" + ings);
+    }
+
+    /**
+     * 削除画面の表示
+     */
+    private void showDeleteForm() {
+        centerPanel.removeAll();
+        JPanel box = new JPanel(new BorderLayout(10, 10));
+        box.setBackground(Color.WHITE);
+        box.setBorder(new EmptyBorder(30, 50, 30, 50));
+
+        DefaultListModel<Recipe> listModel = new DefaultListModel<>();
+        for (Recipe r : allRecipeList.getRecipeList()) listModel.addElement(r);
+        JList<Recipe> list = createStyledRecipeList(listModel);
+        list.setPreferredSize(new Dimension(0, 0));
+
+        JButton btnDel = new JButton("選択したレシピを削除");
+        btnDel.setBackground(new Color(231, 76, 60));
+        btnDel.setForeground(Color.WHITE);
+        btnDel.setOpaque(true);
+        btnDel.setBorderPainted(false);
+        btnDel.addActionListener(e -> {
+            Recipe selected = list.getSelectedValue();
+            if (selected != null) {
+                int result = JOptionPane.showConfirmDialog(this,
+                        "本当に「" + selected.getTitle() + "」を削除しますか？",
+                        "削除の確認", JOptionPane.YES_NO_OPTION);
+                if (result == JOptionPane.YES_OPTION) {
+                    allRecipeList.getRecipeList().remove(selected);
+                    listModel.removeElement(selected);
+                }
+            }
+        });
+
+        JLabel label = new JLabel("削除するレシピを選択してください");
+        label.setFont(FONT_MAIN);
+        box.add(label, BorderLayout.NORTH);
+        box.add(new JScrollPane(list), BorderLayout.CENTER);
+        box.add(btnDel, BorderLayout.SOUTH);
+
+        centerPanel.add(box, BorderLayout.CENTER);
+        updatePanel();
+    }
+
+    /**
+     * コンポーネントを左揃えにしてパネルに追加
+     * @param panel 追加先パネル
+     * @param comp 追加するコンポーネント
+     */
+    private void addLeftAligned(JPanel panel, JComponent comp) {
+        comp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(comp);
+    }
+
+    /**
+     * 装飾されたテキストフィールドの作成
+     * @return カスタマイズされたJTextField
+     */
+    private JTextField createStyledTextField() {
+        JTextField field = new JTextField();
+        field.setPreferredSize(new Dimension(0, 35));
+        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        field.setFont(FONT_MAIN);
+        return field;
+    }
+
+    /**
+     * パネルの再描画
+     */
+    private void updatePanel() {
+        centerPanel.revalidate();
+        centerPanel.repaint();
+    }
+
+    /**
+     * プログラムのエントリーポイント
+     * @param args コマンドライン引数
+     */
     public static void main(String[] args) {
-        try { UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName()); } catch(Exception e) {}
-        SwingUtilities.invokeLater(() -> { SwingMain f = new SwingMain(); f.setLocationRelativeTo(null); f.setVisible(true); });
+        try {
+            UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+        } catch (Exception e) {}
+
+        SwingUtilities.invokeLater(() -> {
+            SwingMain frame = new SwingMain();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
     }
 }
