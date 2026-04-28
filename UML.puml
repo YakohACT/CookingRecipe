@@ -6,6 +6,47 @@ class SwingMain {
     - currentApiKey: String
 }
 
+enum IngredientCategory {
+    VEGETABLE
+    MEAT
+    SEAFOOD
+    CARBOHYDRATE
+    MILK
+    OTHER
+    SEASONING
+}
+
+class Ingredient {
+    - name: String
+    - category: IngredientCategory
+    + getName(): String
+    + getCategory(): IngredientCategory
+}
+
+class Recipe {
+    - title: String
+    - url: String
+    - ingredients: ArrayList<Ingredient>
+    + getTitle(): String
+    + getUrl(): String
+    + getIngredients(): ArrayList<Ingredient>
+}
+
+class IngredientMaster {
+    - database: HashMap<Ingredient, String>
+    + loadCsv(): void
+    + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
+    + getAllIngredients(): ArrayList<Ingredient>
+}
+
+class AllRecipeList {
+    - recipeList: ArrayList<Recipe>
+    + addRecipe(recipe: Recipe): void
+    + deleteRecipe(recipe: Recipe): void
+    + read(): void
+    + write(): void
+}
+
 class RecipeAIService {
     - selectedProvider: Provider
     - apiKey: String
@@ -32,8 +73,14 @@ class ClaudeProvider {
 }
 
 ' 関連性（SwingMain は RecipeAIService だけを知っていれば良い）
+SwingMain --> AllRecipeList
+SwingMain --> IngredientMaster
 SwingMain ..> RecipeAIService : uses
 RecipeAIService o--> AbstractRecipeAIProvider : delegates to >
+AllRecipeList "1" *-- "many" Recipe
+Recipe "many" o-- "many" Ingredient
+Ingredient "many" -- "1" IngredientCategory
+IngredientMaster "1" *-- "many" Ingredient
 
 ' 継承（各AIクラスは共通基盤を拡張する）
 AbstractRecipeAIProvider <|-- OpenAIProvider
