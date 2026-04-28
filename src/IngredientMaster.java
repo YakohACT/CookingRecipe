@@ -10,7 +10,6 @@ import java.util.ArrayList;
  */
 public class IngredientMaster {
     private HashMap<Ingredient, String> database;
-
     public IngredientMaster() {
         database = new HashMap<>();
         loadCsv();
@@ -31,7 +30,7 @@ public class IngredientMaster {
                 String[] data = line.split(",");
                 if (data.length >= 2) {
                     try {
-                        String catStr = data[0].trim().equals("CARBOHDRATE") ? "CARBOHYDRATE" : data[0].trim();
+                        String catStr = data[0].trim();
                         IngredientCategory cat = IngredientCategory.valueOf(catStr);
                         String name = data[1].trim();
                         database.put(new Ingredient(name, cat), name);

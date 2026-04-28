@@ -12,9 +12,11 @@ import java.util.stream.Collectors;
 public class RecipeAIService {
 
     /** AIプロバイダーの種類 */
+    /** 選択可能なAI */
     public enum Provider { OPENAI, GEMINI, CLAUDE }
-
+    /** 選択したAI */
     private Provider selectedProvider = Provider.OPENAI;
+    /** APIキー */
     private String apiKey = "";
 
     /**
