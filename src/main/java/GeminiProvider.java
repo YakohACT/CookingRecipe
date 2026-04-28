@@ -1,39 +1,30 @@
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import com.google.genai.Client;
+import com.google.genai.types.GenerateContentResponse;
 import java.util.ArrayList;
 
 /**
  * Google Gemini との通信を担当するクラス
+ * 公式SDK (google-genai) を使用した実装
  */
 public class GeminiProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] generateRecipe(String apiKey, ArrayList<Ingredient> allIngredients) throws Exception {
         String prompt = buildPrompt(allIngredients);
-        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey;
-        String json = "{\"contents\": [{\"parts\":[{\"text\":\"" + prompt + "\"}]}]}";
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; utf-8");
-        conn.setDoOutput(true);
+        // 1. クライアントの初期化（UIから受け取ったAPIキーを設定）
+        System.setProperty("GEMINI_API_KEY", apiKey);
+        Client client = new Client();
 
-        try (OutputStream os = conn.getOutputStream()) { os.write(json.getBytes("utf-8")); }
+        // 2. generateContent メソッドによるリクエスト
+        GenerateContentResponse response = client.models.generateContent(
+                "gemini-1.5-flash",
+                prompt,
+                null
+        );
 
-        StringBuilder res = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"))) {
-            String line;
-            while ((line = br.readLine()) != null) res.append(line);
-        }
-
-        String jsonRes = res.toString();
-        int start = jsonRes.indexOf("\"text\": \"") + 9;
-        int end = jsonRes.indexOf("\"", start);
-        String text = jsonRes.substring(start, end);
-
+        // 3. レスポンスからテキストを取得し、共通の解析メソッドへ渡す
+        String text = response.text();
         return parseStandardResponse(text);
     }
 }
