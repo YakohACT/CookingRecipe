@@ -1,0 +1,43 @@
+@startuml
+skinparam ClassAttributeIconSize 0
+
+class SwingMain {
+    - currentAiProvider: RecipeAIService.Provider
+    - currentApiKey: String
+}
+
+class RecipeAIService {
+    - selectedProvider: Provider
+    - apiKey: String
+    + setConfig(provider: Provider, apiKey: String): void
+    + suggestRecipe(allIngredients: ArrayList<Ingredient>): String[]
+}
+
+abstract class AbstractRecipeAIProvider {
+    + {abstract} generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+    # buildPrompt(allIngredients: ArrayList<Ingredient>): String
+    # parseStandardResponse(text: String): String[]
+}
+
+class OpenAIProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+class GeminiProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+class ClaudeProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+' 関連性（SwingMain は RecipeAIService だけを知っていれば良い）
+SwingMain ..> RecipeAIService : uses
+RecipeAIService o--> AbstractRecipeAIProvider : delegates to >
+
+' 継承（各AIクラスは共通基盤を拡張する）
+AbstractRecipeAIProvider <|-- OpenAIProvider
+AbstractRecipeAIProvider <|-- GeminiProvider
+AbstractRecipeAIProvider <|-- ClaudeProvider
+
+@enduml
