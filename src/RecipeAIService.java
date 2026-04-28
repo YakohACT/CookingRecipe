@@ -33,11 +33,11 @@ public class RecipeAIService {
      * @return 提案結果 [0]:タイトル, [1]:食材名（カンマ区切り）
      */
     public String[] suggestRecipe(ArrayList<Ingredient> allIngredients) throws Exception {
-        if (apiKey == null || apiKey.isEmpty()) throw new Exception("APIキーが設定されていません");
+        if (apiKey == null || apiKey.isEmpty()) throw new Exception("APIキーが設定されていない");
 
         String names = allIngredients.stream().map(Ingredient::getName).collect(Collectors.joining(","));
         String prompt = "優秀なシェフとして、以下の食材から3つ選びレシピを提案してください。" +
-                "形式厳守。タイトル:[名前]\\n食材:[A],[B]\\nこれ以外の回答は不要。\\n候補:" + names;
+                "形式厳守。タイトル:[名前]\\n食材:[A],[B]\\nこれ以外の回答や記号（ダブルクォーテーション等）は一切不要。\\n候補:" + names;
 
         URL url;
         String json;
@@ -45,7 +45,8 @@ public class RecipeAIService {
         // プロバイダーごとのリクエスト構築
         switch (selectedProvider) {
             case GEMINI:
-                url = new URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey);
+                // 最新かつ高速な gemini-1.5-flash を利用
+                url = new URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey);
                 json = "{\"contents\": [{\"parts\":[{\"text\":\"" + prompt + "\"}]}]}";
                 break;
             case CLAUDE:
@@ -72,8 +73,20 @@ public class RecipeAIService {
             conn.setRequestProperty("anthropic-version", "2023-06-01");
         }
 
+        // リクエストの送信
         try (OutputStream os = conn.getOutputStream()) {
             os.write(json.getBytes("utf-8"));
+        }
+
+        // レスポンスコードの確認（エラーの早期発見）
+        int responseCode = conn.getResponseCode();
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            // エラーの詳細を読み取る
+            try (BufferedReader errorBr = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"))) {
+                String errorMsg = errorBr.lines().collect(Collectors.joining());
+                System.err.println("APIエラー詳細: " + errorMsg); // コンソールに詳細を出力
+                throw new Exception("HTTPエラー " + responseCode + " (詳細はコンソールを確認)");
+            }
         }
 
         StringBuilder res = new StringBuilder();
@@ -87,30 +100,24 @@ public class RecipeAIService {
 
     /**
      * AIのJSONレスポンスからタイトルと食材の抽出
-     * 各プロバイダーのJSON構造に合わせて解析
+     * 外部ライブラリなしでもエラーが起きにくい「キーワード直接検索型」の解析を実行
      */
     private String[] parseResponse(String json) {
         try {
-            String text = "";
-            if (selectedProvider == Provider.GEMINI) {
-                int start = json.indexOf("\"text\": \"") + 9;
-                int end = json.indexOf("\"", start);
-                text = json.substring(start, end);
-            } else if (selectedProvider == Provider.CLAUDE) {
-                int start = json.indexOf("\"text\": \"") + 9;
-                int end = json.indexOf("\"", start);
-                text = json.substring(start, end);
-            } else { // OpenAI
-                int start = json.indexOf("\"content\": \"") + 12;
-                int end = json.indexOf("\"", start);
-                text = json.substring(start, end);
-            }
+            // エスケープされた改行などを実際の文字に変換
+            String unescaped = json.replace("\\n", "\n").replace("\\\"", "\"");
 
-            text = text.replace("\\n", "\n").replace("\\\"", "\"");
-            String title = "AI提案レシピ", ings = "";
-            for (String l : text.split("\n")) {
-                if (l.contains("タイトル:")) title = l.split(":")[1].trim();
-                if (l.contains("食材:")) ings = l.split(":")[1].trim();
+            String title = "AI提案レシピ";
+            String ings = "";
+
+            // JSONの厳密な構造に依存せず、必要な行だけを直接抜き出す（堅牢な処理）
+            for (String line : unescaped.split("\n")) {
+                if (line.contains("タイトル:")) {
+                    // 「タイトル:」以降の文字を取得し、邪魔なJSONの記号( " や , や } )を消去
+                    title = line.substring(line.indexOf("タイトル:") + 5).replaceAll("[\",\\}\\]]", "").trim();
+                } else if (line.contains("食材:")) {
+                    ings = line.substring(line.indexOf("食材:") + 3).replaceAll("[\",\\}\\]]", "").trim();
+                }
             }
             return new String[]{title, ings};
         } catch (Exception e) {
