@@ -1,73 +1,43 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
-enum IngredientCategory {
-    VEGETABLE
-    MEAT
-    SEAFOOD
-    CARBOHYDRATE
-    MILK
-    OTHER
-    SEASONING
-}
-
-class Ingredient {
-    - name: String
-    - category: IngredientCategory
-    + getName(): String
-    + getCategory(): IngredientCategory
-}
-
-class Recipe {
-    - title: String
-    - url: String
-    - ingredients: ArrayList<Ingredient>
-    + getTitle(): String
-    + getUrl(): String
-    + getIngredients(): ArrayList<Ingredient>
-}
-
-class IngredientMaster {
-    - database: HashMap<Ingredient, String>
-    + loadCsv(): void
-    + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
-    + getAllIngredients(): ArrayList<Ingredient>
-}
-
-class AllRecipeList {
-    - recipeList: ArrayList<Recipe>
-    + addRecipe(recipe: Recipe): void
-    + deleteRecipe(recipe: Recipe): void
-    + read(): void
-    + write(): void
+class SwingMain {
+    - currentAiProvider: RecipeAIService.Provider
+    - currentApiKey: String
 }
 
 class RecipeAIService {
-    + enum Provider { OPENAI, GEMINI, CLAUDE }
     - selectedProvider: Provider
     - apiKey: String
-    + setConfig(provider: Provider, key: String): void
+    + setConfig(provider: Provider, apiKey: String): void
     + suggestRecipe(allIngredients: ArrayList<Ingredient>): String[]
-    - parseResponse(json: String): String[]
 }
 
-class SwingMain {
-    - allRecipeList: AllRecipeList
-    - ingredientMaster: IngredientMaster
-    - currentAiProvider: RecipeAIService.Provider
-    - currentApiKey: String
-    + showRegisterForm(): void
-    + showViewMenu(): void
-    + showSettingsForm(): void
+abstract class AbstractRecipeAIProvider {
+    + {abstract} generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+    # buildPrompt(allIngredients: ArrayList<Ingredient>): String
+    # parseStandardResponse(text: String): String[]
 }
 
-' 関連性
-SwingMain --> AllRecipeList
-SwingMain --> IngredientMaster
+class OpenAIProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+class GeminiProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+class ClaudeProvider {
+    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+}
+
+' 関連性（SwingMain は RecipeAIService だけを知っていれば良い）
 SwingMain ..> RecipeAIService : uses
-AllRecipeList "1" *-- "many" Recipe
-Recipe "many" o-- "many" Ingredient
-Ingredient "many" -- "1" IngredientCategory
-IngredientMaster "1" *-- "many" Ingredient
+RecipeAIService o--> AbstractRecipeAIProvider : delegates to >
+
+' 継承（各AIクラスは共通基盤を拡張する）
+AbstractRecipeAIProvider <|-- OpenAIProvider
+AbstractRecipeAIProvider <|-- GeminiProvider
+AbstractRecipeAIProvider <|-- ClaudeProvider
 
 @enduml
