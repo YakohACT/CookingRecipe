@@ -7,46 +7,114 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
- * Ollama APIと通信しレシピ提案を取得するサービスクラス
+ * 複数のAIプロバイダーを切り替えてレシピ提案を取得するサービスクラス
  */
 public class RecipeAIService {
-    private static final String API_URL = "http://localhost:11434/api/generate";
-    private static final String MODEL_NAME = "gemma4:e4b";
+
+    /** AIプロバイダーの種類 */
+    public enum Provider { OPENAI, GEMINI, CLAUDE }
+
+    private Provider selectedProvider = Provider.OPENAI;
+    private String apiKey = "";
+
+    /**
+     * プロバイダーとAPIキーの設定
+     * @param provider 利用するAI
+     * @param apiKey APIキー
+     */
+    public void setConfig(Provider provider, String apiKey) {
+        this.selectedProvider = provider;
+        this.apiKey = apiKey;
+    }
 
     /**
      * AIによるレシピ提案の取得
-     * @param allIngredients 候補となる食材リスト
+     * @param allIngredients 候補食材リスト
      * @return 提案結果 [0]:タイトル, [1]:食材名（カンマ区切り）
      */
     public String[] suggestRecipe(ArrayList<Ingredient> allIngredients) throws Exception {
+        if (apiKey == null || apiKey.isEmpty()) throw new Exception("APIキーが設定されていません");
+
         String names = allIngredients.stream().map(Ingredient::getName).collect(Collectors.joining(","));
         String prompt = "優秀なシェフとして、以下の食材から3つ選びレシピを提案してください。" +
                 "形式厳守。タイトル:[名前]\\n食材:[A],[B]\\nこれ以外の回答は不要。\\n候補:" + names;
 
-        String json = String.format("{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}", MODEL_NAME, prompt);
+        URL url;
+        String json;
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(API_URL).openConnection();
+        // プロバイダーごとのリクエスト構築
+        switch (selectedProvider) {
+            case GEMINI:
+                url = new URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + apiKey);
+                json = "{\"contents\": [{\"parts\":[{\"text\":\"" + prompt + "\"}]}]}";
+                break;
+            case CLAUDE:
+                url = new URL("https://api.anthropic.com/v1/messages");
+                json = "{\"model\":\"claude-3-haiku-20240307\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"" + prompt + "\"}]}";
+                break;
+            case OPENAI:
+            default:
+                url = new URL("https://api.openai.com/v1/chat/completions");
+                json = "{\"model\":\"gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"" + prompt + "\"}]}";
+                break;
+        }
+
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json; utf-8");
         conn.setDoOutput(true);
-        try (OutputStream os = conn.getOutputStream()) { os.write(json.getBytes("utf-8")); }
+
+        // プロバイダー固有のヘッダー設定
+        if (selectedProvider == Provider.OPENAI) {
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+        } else if (selectedProvider == Provider.CLAUDE) {
+            conn.setRequestProperty("x-api-key", apiKey);
+            conn.setRequestProperty("anthropic-version", "2023-06-01");
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(json.getBytes("utf-8"));
+        }
 
         StringBuilder res = new StringBuilder();
         try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"))) {
             String line;
             while ((line = br.readLine()) != null) res.append(line);
         }
+
         return parseResponse(res.toString());
     }
 
+    /**
+     * AIのJSONレスポンスからタイトルと食材の抽出
+     * 各プロバイダーのJSON構造に合わせて解析
+     */
     private String[] parseResponse(String json) {
-        int start = json.indexOf("\"response\":\"") + 12;
-        int end = json.indexOf("\",\"done\"");
-        String text = json.substring(start, end).replace("\\n", "\n");
-        String title = "AI提案レシピ", ings = "";
-        for (String l : text.split("\n")) {
-            if (l.contains("タイトル:")) title = l.split(":")[1].trim();
-            if (l.contains("食材:")) ings = l.split(":")[1].trim();
+        try {
+            String text = "";
+            if (selectedProvider == Provider.GEMINI) {
+                int start = json.indexOf("\"text\": \"") + 9;
+                int end = json.indexOf("\"", start);
+                text = json.substring(start, end);
+            } else if (selectedProvider == Provider.CLAUDE) {
+                int start = json.indexOf("\"text\": \"") + 9;
+                int end = json.indexOf("\"", start);
+                text = json.substring(start, end);
+            } else { // OpenAI
+                int start = json.indexOf("\"content\": \"") + 12;
+                int end = json.indexOf("\"", start);
+                text = json.substring(start, end);
+            }
+
+            text = text.replace("\\n", "\n").replace("\\\"", "\"");
+            String title = "AI提案レシピ", ings = "";
+            for (String l : text.split("\n")) {
+                if (l.contains("タイトル:")) title = l.split(":")[1].trim();
+                if (l.contains("食材:")) ings = l.split(":")[1].trim();
+            }
+            return new String[]{title, ings};
+        } catch (Exception e) {
+            return new String[]{"AI提案レシピ", ""};
         }
-        return new String[]{title, ings};
     }
 }

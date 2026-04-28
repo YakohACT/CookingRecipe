@@ -37,13 +37,16 @@ class IngredientMaster {
 class AllRecipeList {
     - recipeList: ArrayList<Recipe>
     + addRecipe(recipe: Recipe): void
+    + deleteRecipe(recipe: Recipe): void
     + read(): void
     + write(): void
 }
 
 class RecipeAIService {
-    - API_URL: String
-    - MODEL_NAME: String
+    + enum Provider { OPENAI, GEMINI, CLAUDE }
+    - selectedProvider: Provider
+    - apiKey: String
+    + setConfig(provider: Provider, key: String): void
     + suggestRecipe(allIngredients: ArrayList<Ingredient>): String[]
     - parseResponse(json: String): String[]
 }
@@ -51,12 +54,14 @@ class RecipeAIService {
 class SwingMain {
     - allRecipeList: AllRecipeList
     - ingredientMaster: IngredientMaster
-    - centerPanel: JPanel
+    - currentAiProvider: RecipeAIService.Provider
+    - currentApiKey: String
     + showRegisterForm(): void
     + showViewMenu(): void
+    + showSettingsForm(): void
 }
 
-' 関係性の定義
+' 関連性
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
 SwingMain ..> RecipeAIService : uses
