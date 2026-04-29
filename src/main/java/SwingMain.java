@@ -17,6 +17,7 @@ public class SwingMain extends JFrame {
     // AI設定保持用の変数
     private RecipeAIService.Provider currentAiProvider = RecipeAIService.Provider.OPENAI;
     private String currentApiKey = "";
+    private String currentModelName = "gpt-4o-mini"; // デフォルトモデル
 
     // カラーテーマの定義
     private final Color COLOR_PRIMARY = new Color(52, 152, 219);
@@ -81,12 +82,6 @@ public class SwingMain extends JFrame {
         showWelcomeMessage();
     }
 
-    /**
-     * サイドメニュー用ボタンの追加
-     * @param parent 追加先パネル
-     * @param text ボタンのテキスト
-     * @param action クリック時のアクション
-     */
     private void addSideButton(JPanel parent, String text, java.awt.event.ActionListener action) {
         JButton btn = new JButton(text);
         btn.setMaximumSize(new Dimension(180, 40));
@@ -104,9 +99,6 @@ public class SwingMain extends JFrame {
         parent.add(Box.createRigidArea(new Dimension(0, 10)));
     }
 
-    /**
-     * 初期画面の表示
-     */
     private void showWelcomeMessage() {
         centerPanel.removeAll();
         JLabel label = new JLabel("<html><center>Welcome!<br>操作を選択してください</center></html>", SwingConstants.CENTER);
@@ -116,7 +108,7 @@ public class SwingMain extends JFrame {
     }
 
     /**
-     * AIプロバイダーとAPIキーの設定画面を表示
+     * AIプロバイダー、モデル、APIキーの設定画面を表示
      */
     private void showSettingsForm() {
         centerPanel.removeAll();
@@ -130,14 +122,26 @@ public class SwingMain extends JFrame {
         addLeftAligned(form, titleLabel);
         form.add(Box.createRigidArea(new Dimension(0, 20)));
 
-        addLeftAligned(form, new JLabel("利用するAIプロバイダーを選択してください:"));
+        addLeftAligned(form, new JLabel("利用するAIプロバイダー:"));
         JComboBox<RecipeAIService.Provider> providerCombo = new JComboBox<>(RecipeAIService.Provider.values());
         providerCombo.setSelectedItem(currentAiProvider);
         providerCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         addLeftAligned(form, providerCombo);
+        form.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        form.add(Box.createRigidArea(new Dimension(0, 20)));
-        addLeftAligned(form, new JLabel("APIキーを入力してください:"));
+        addLeftAligned(form, new JLabel("利用するモデル:"));
+        JComboBox<String> modelCombo = new JComboBox<>();
+        modelCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        addLeftAligned(form, modelCombo);
+
+        // プロバイダーが変わった時にモデル一覧を更新するイベント
+        providerCombo.addActionListener(e -> updateModelCombo(providerCombo, modelCombo));
+        updateModelCombo(providerCombo, modelCombo); // 画面を開いた時の初期設定
+        modelCombo.setSelectedItem(currentModelName); // 現在の設定を復元
+
+        form.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        addLeftAligned(form, new JLabel("APIキー:"));
         JPasswordField keyField = new JPasswordField(currentApiKey);
         keyField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         addLeftAligned(form, keyField);
@@ -150,6 +154,7 @@ public class SwingMain extends JFrame {
         btnSave.setBorderPainted(false);
         btnSave.addActionListener(e -> {
             currentAiProvider = (RecipeAIService.Provider) providerCombo.getSelectedItem();
+            currentModelName = (String) modelCombo.getSelectedItem();
             currentApiKey = new String(keyField.getPassword()).trim();
             JOptionPane.showMessageDialog(this, "設定を保存しました");
             showWelcomeMessage();
@@ -158,6 +163,22 @@ public class SwingMain extends JFrame {
 
         centerPanel.add(new JScrollPane(form), BorderLayout.CENTER);
         updatePanel();
+    }
+
+    /**
+     * プロバイダーに応じたモデル一覧をAIクラスから取得して更新する
+     */
+    private void updateModelCombo(JComboBox<RecipeAIService.Provider> providerCombo, JComboBox<String> modelCombo) {
+        modelCombo.removeAllItems();
+        RecipeAIService.Provider selectedProvider = (RecipeAIService.Provider) providerCombo.getSelectedItem();
+
+        // UIに直接書かず、サービス経由で各AIクラスが保持しているモデル一覧を取得
+        RecipeAIService service = new RecipeAIService();
+        String[] availableModels = service.getModelsForProvider(selectedProvider);
+
+        for (String model : availableModels) {
+            modelCombo.addItem(model);
+        }
     }
 
     /**
@@ -171,7 +192,6 @@ public class SwingMain extends JFrame {
         form.setBackground(Color.WHITE);
         form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
-        // タイトルとAIボタンのエリア
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(Color.WHITE);
         headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -222,7 +242,6 @@ public class SwingMain extends JFrame {
             }
         });
 
-        // AIボタンのアクション
         btnAi.addActionListener(e -> {
             if (currentApiKey.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキーを入力してください");
@@ -235,8 +254,11 @@ public class SwingMain extends JFrame {
                 @Override
                 protected String[] doInBackground() throws Exception {
                     RecipeAIService aiService = new RecipeAIService();
-                    aiService.setConfig(currentAiProvider, currentApiKey);
-                    return aiService.suggestRecipe(ingredientMaster.getAllIngredients());
+                    aiService.setConfig(currentAiProvider, currentApiKey, currentModelName);
+
+                    // URLフィールドの値を取得して渡す（YouTube解析用）
+                    String inputUrl = urlField.getText().trim();
+                    return aiService.suggestRecipe(inputUrl, ingredientMaster.getAllIngredients());
                 }
 
                 @Override
@@ -257,7 +279,8 @@ public class SwingMain extends JFrame {
                         }
                         JOptionPane.showMessageDialog(SwingMain.this, "AIがレシピを提案しました");
                     } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(SwingMain.this, "AIの呼び出しに失敗しました。\nAPIキーやインターネット接続を確認してください。", "エラー", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(SwingMain.this, "AIの呼び出しに失敗しました。\n設定内容やコンソールのエラーを確認してください。", "エラー", JOptionPane.ERROR_MESSAGE);
+                        ex.printStackTrace(); // デバッグ用にコンソールにも出力
                     } finally {
                         btnAi.setText("✨ AI自動提案");
                         btnAi.setEnabled(true);
@@ -277,7 +300,6 @@ public class SwingMain extends JFrame {
             String title = titleField.getText().trim();
             String url = urlField.getText().trim();
 
-            // バリデーションチェック
             if (title.isEmpty() || url.isEmpty() || selectedListModel.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "入力されていない箇所があります", "入力エラー", JOptionPane.ERROR_MESSAGE);
                 return;
@@ -290,11 +312,10 @@ public class SwingMain extends JFrame {
             showWelcomeMessage();
         });
 
-        // コンポーネントの配置
         addLeftAligned(form, new JLabel("タイトル:"));
         addLeftAligned(form, titleField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
-        addLeftAligned(form, new JLabel("URL (AI生成時は手動で入力してください):"));
+        addLeftAligned(form, new JLabel("URL (YouTubeのURLを入力するとAIが動画を参考にします):"));
         addLeftAligned(form, urlField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
         addLeftAligned(form, new JLabel("カテゴリから食材を選択:"));
@@ -318,9 +339,6 @@ public class SwingMain extends JFrame {
         updatePanel();
     }
 
-    /**
-     * 複数検索パターンを持つ閲覧画面の表示
-     */
     private void showViewMenu() {
         centerPanel.removeAll();
         JTabbedPane tabs = new JTabbedPane();
@@ -429,11 +447,6 @@ public class SwingMain extends JFrame {
         updatePanel();
     }
 
-    /**
-     * 選択ハイライト機能付きリストの作成
-     * @param model リストモデル
-     * @return カスタマイズされたJList
-     */
     private JList<Recipe> createStyledRecipeList(DefaultListModel<Recipe> model) {
         JList<Recipe> list = new JList<>(model);
         list.setCellRenderer((l, value, index, isSelected, cellHasFocus) -> {
@@ -454,10 +467,6 @@ public class SwingMain extends JFrame {
         return list;
     }
 
-    /**
-     * レシピ詳細表示用テキストエリアの作成
-     * @return カスタマイズされたJTextArea
-     */
     private JTextArea createDetailArea() {
         JTextArea area = new JTextArea();
         area.setEditable(false);
@@ -466,19 +475,11 @@ public class SwingMain extends JFrame {
         return area;
     }
 
-    /**
-     * 詳細表示エリアの内容更新
-     * @param area 更新対象のJTextArea
-     * @param recipe 表示するレシピ
-     */
     private void updateDetailArea(JTextArea area, Recipe recipe) {
         String ings = recipe.getIngredients().stream().map(Ingredient::getName).collect(Collectors.joining(", "));
         area.setText("【レシピ名】\n" + recipe.getTitle() + "\n\n【URL】\n" + recipe.getUrl() + "\n\n【必要食材】\n" + ings);
     }
 
-    /**
-     * 削除画面の表示
-     */
     private void showDeleteForm() {
         centerPanel.removeAll();
         JPanel box = new JPanel(new BorderLayout(10, 10));
