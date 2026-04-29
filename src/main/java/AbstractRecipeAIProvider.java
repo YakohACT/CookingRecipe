@@ -28,12 +28,21 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     protected String[] parseStandardResponse(String text) {
-        String title = "AI提案レシピ", ings = "";
+        String title = "AI提案レシピ";
+        String ings = "";
         String formattedText = text.replace("\\n", "\n").replace("\\\"", "\"");
 
         for (String l : formattedText.split("\n")) {
-            if (l.contains("タイトル:")) title = l.split(":")[1].trim();
-            if (l.contains("食材:")) ings = l.split(":")[1].trim();
+            if (l.contains("タイトル:")) {
+                // split(":", 2) でタイトル内の「:」を正しく扱う
+                String[] parts = l.split(":", 2);
+                if (parts.length >= 2) title = parts[1].trim();
+            }
+            if (l.contains("食材:")) {
+                // split(":", 2) で食材名内の「:」を正しく扱う
+                String[] parts = l.split(":", 2);
+                if (parts.length >= 2) ings = parts[1].trim();
+            }
         }
         return new String[]{title, ings};
     }
