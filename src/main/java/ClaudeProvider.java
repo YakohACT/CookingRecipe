@@ -71,10 +71,11 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] getAvailableModels() {
+        // 2026年4月時点のアクティブモデル (claude-sonnet-4 / claude-opus-4 は2026/4/20退役済み)
         return new String[]{
-                "claude-haiku-4-5-20251001",
-                "claude-sonnet-4-5",
-                "claude-opus-4-5"
+                "claude-opus-4-7",        // 最高性能・最新フラッグシップ
+                "claude-sonnet-4-6",      // 速度と性能のバランス
+                "claude-haiku-4-5-20251001" // 最高速・低コスト
         };
     }
 }

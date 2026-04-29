@@ -84,11 +84,13 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] getAvailableModels() {
+        // 2026年4月時点のアクティブモデル
+        // Gemini 1.x / 2.0 系は全て終了(404エラー)のため除外
         return new String[]{
-                "gemini-1.5-flash",
-                "gemini-2.0-flash",
-                "gemini-1.5-pro",
-                "gemini-pro"
+                "gemini-3.1-pro-preview",  // 最高性能・最新
+                "gemini-2.5-pro",          // 高性能・安定版
+                "gemini-2.5-flash",        // 高速・高性能バランス
+                "gemini-2.5-flash-lite"    // 最速・低コスト
         };
     }
 }

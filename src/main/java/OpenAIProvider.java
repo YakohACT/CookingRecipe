@@ -70,10 +70,17 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] getAvailableModels() {
+        // 2026年4月時点で /v1/chat/completions エンドポイントに対応しているモデル
         return new String[]{
-                "gpt-4o-mini",
-                "gpt-4o",
-                "gpt-3.5-turbo"
+                "gpt-5.5",        // 最高性能フラッグシップ
+                "gpt-5.4",        // 高性能・汎用
+                "gpt-5.4-mini",   // 高速・低コスト
+                "gpt-5.4-nano",   // 最速・最安
+                "gpt-4.1",        // 安定版汎用
+                "gpt-4.1-mini",   // 安定版・軽量
+                "gpt-4.1-nano",   // 安定版・最軽量
+                "gpt-4o",         // 旧世代・マルチモーダル
+                "gpt-4o-mini"     // 旧世代・軽量
         };
     }
 }
