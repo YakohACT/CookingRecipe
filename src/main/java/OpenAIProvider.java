@@ -30,12 +30,16 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
 
         String jsonRes = readStream(conn.getInputStream());
 
-        // "content": "..." の開始位置を特定
-        int start = jsonRes.indexOf("\"content\": \"");
-        if (start == -1) {
+        // "content":"..." の開始位置を特定（コロン後の空白有無に対応）
+        int keyIdx = jsonRes.indexOf("\"content\":");
+        if (keyIdx == -1) {
             throw new Exception("レスポンス解析失敗: contentフィールドが見つかりません。レスポンス: " + jsonRes);
         }
-        start += 12; // "content": " の文字数分進める
+        int valueQuote = jsonRes.indexOf("\"", keyIdx + 10);
+        if (valueQuote == -1) {
+            throw new Exception("レスポンス解析失敗: contentフィールドの値が見つかりません。レスポンス: " + jsonRes);
+        }
+        int start = valueQuote + 1;
 
         // バックスラッシュエスケープを考慮して終端クォートを探す
         int end = findUnescapedQuote(jsonRes, start);

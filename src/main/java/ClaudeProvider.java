@@ -31,12 +31,16 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
 
         String jsonRes = readStream(conn.getInputStream());
 
-        // "text": "..." の開始位置を特定
-        int start = jsonRes.indexOf("\"text\": \"");
-        if (start == -1) {
+        // "text":"..." の開始位置を特定（コロン後の空白有無に対応）
+        int keyIdx = jsonRes.indexOf("\"text\":");
+        if (keyIdx == -1) {
             throw new Exception("レスポンス解析失敗: textフィールドが見つかりません。レスポンス: " + jsonRes);
         }
-        start += 9; // "text": " の文字数分進める
+        int valueQuote = jsonRes.indexOf("\"", keyIdx + 7);
+        if (valueQuote == -1) {
+            throw new Exception("レスポンス解析失敗: textフィールドの値が見つかりません。レスポンス: " + jsonRes);
+        }
+        int start = valueQuote + 1;
 
         // バックスラッシュエスケープを考慮して終端クォートを探す
         int end = findUnescapedQuote(jsonRes, start);

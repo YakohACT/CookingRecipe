@@ -17,10 +17,25 @@ public class IngredientMaster {
 
     /**
      * database.csv からのデータ読み込み
+     * 実行ディレクトリの違いに対応するため複数候補を試行する
      */
     private void loadCsv() {
-        File file = new File("CookingRecipe/database.csv");
-        if (!file.exists()) return;
+        String[] candidates = {
+                "database.csv",
+                "CookingRecipe/database.csv",
+                "../database.csv",
+                "../../database.csv",
+                "../../../database.csv"
+        };
+        File file = null;
+        for (String path : candidates) {
+            File candidate = new File(path);
+            if (candidate.exists()) {
+                file = candidate;
+                break;
+            }
+        }
+        if (file == null) return;
 
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
             String line;

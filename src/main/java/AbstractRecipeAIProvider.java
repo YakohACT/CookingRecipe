@@ -36,15 +36,23 @@ public abstract class AbstractRecipeAIProvider {
             if (l.contains("タイトル:")) {
                 // split(":", 2) でタイトル内の「:」を正しく扱う
                 String[] parts = l.split(":", 2);
-                if (parts.length >= 2) title = parts[1].trim();
+                if (parts.length >= 2) title = stripBrackets(parts[1].trim());
             }
             if (l.contains("食材:")) {
                 // split(":", 2) で食材名内の「:」を正しく扱う
                 String[] parts = l.split(":", 2);
-                if (parts.length >= 2) ings = parts[1].trim();
+                if (parts.length >= 2) ings = stripBrackets(parts[1].trim());
             }
         }
         return new String[]{title, ings};
+    }
+
+    /**
+     * AIがプロンプトのプレースホルダ([名前]や[A]など)をそのまま含めて返した場合に
+     * 角括弧と日本語カギカッコを取り除く
+     */
+    private String stripBrackets(String s) {
+        return s.replaceAll("[\\[\\]【】「」]", "").trim();
     }
 
     /**
