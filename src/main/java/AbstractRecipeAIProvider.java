@@ -2,63 +2,179 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
- * 各AIプロバイダーの共通処理をまとめた抽象クラス
+ * 各AIプロバイダーの共通処理をまとめた抽象クラス。
+ * プロンプト構築 / JSONエスケープ / レスポンスJSONのパースを提供する
  */
 public abstract class AbstractRecipeAIProvider {
 
-    /**
-     * AIを利用してレシピを提案する
-     *
-     * @param apiKey         APIキー
-     * @param modelName      利用するAIモデル名
-     * @param url            参考にする動画やWebのURL
-     * @param allIngredients 利用可能な食材リスト
-     */
     public abstract String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception;
 
-    protected String buildPrompt(String url, ArrayList<Ingredient> allIngredients) {
-        String names = allIngredients.stream().map(Ingredient::getName).collect(Collectors.joining(","));
-        String prompt = "優秀なシェフとして、以下の食材から3つ選びレシピを提案してください。";
-
-        if (url != null && !url.trim().isEmpty()) {
-            prompt += "特に、指定された動画(" + url + ")の内容（料理の雰囲気やジャンル）を大いに参考にして考案してください。";
-        }
-
-        return prompt + "形式厳守。タイトル:[名前]\\n食材:[A],[B]\\nこれ以外の回答は不要。\\n候補:" + names;
-    }
-
-    protected String[] parseStandardResponse(String text) {
-        String title = "AI提案レシピ";
-        String ings = "";
-        String formattedText = text.replace("\\n", "\n").replace("\\\"", "\"");
-
-        for (String l : formattedText.split("\n")) {
-            if (l.contains("タイトル:")) {
-                // split(":", 2) でタイトル内の「:」を正しく扱う
-                String[] parts = l.split(":", 2);
-                if (parts.length >= 2) title = stripBrackets(parts[1].trim());
-            }
-            if (l.contains("食材:")) {
-                // split(":", 2) で食材名内の「:」を正しく扱う
-                String[] parts = l.split(":", 2);
-                if (parts.length >= 2) ings = stripBrackets(parts[1].trim());
-            }
-        }
-        return new String[]{title, ings};
-    }
-
-    /**
-     * AIがプロンプトのプレースホルダ([名前]や[A]など)をそのまま含めて返した場合に
-     * 角括弧と日本語カギカッコを取り除く
-     */
-    private String stripBrackets(String s) {
-        return s.replaceAll("[\\[\\]【】「」]", "").trim();
-    }
-
-    /**
-     * このAIプロバイダーで利用可能なモデルの一覧を取得する
-     *
-     * @return モデル名の配列
-     */
     public abstract String[] getAvailableModels();
+
+    /**
+     * 食材候補からレシピを提案させるプロンプトを構築する。
+     * 候補リストを先頭に置き、JSON形式での回答を強制する。
+     */
+    protected String buildPrompt(String url, ArrayList<Ingredient> allIngredients) {
+        String names = allIngredients.stream()
+                .map(Ingredient::getName)
+                .collect(Collectors.joining(", "));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("あなたは日本の家庭料理のシェフです。\n\n");
+        sb.append("【利用可能な食材】\n");
+        sb.append(names).append("\n\n");
+        sb.append("【ルール】\n");
+        sb.append("・上記リストに含まれる食材だけを使うこと\n");
+        sb.append("・食材は必ず正確に3つ選ぶこと\n");
+        sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
+        if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
+            sb.append("・添付された動画の料理ジャンルや雰囲気を参考にすること\n");
+        }
+        sb.append("\n【出力形式】\n");
+        sb.append("以下のキーを持つJSONオブジェクトのみを返してください。\n");
+        sb.append("- title: 料理名 (文字列)\n");
+        sb.append("- ingredients: 上記リストから選んだ食材名3つの配列 (文字列の配列)\n");
+        return sb.toString();
+    }
+
+    /**
+     * APIレスポンスから抽出した text/content フィールドの中身(まだJSONエスケープ済み)を
+     * 解読し、{title, ingredients(カンマ連結)} の形に変換する
+     */
+    protected String[] parseJsonResponse(String escapedJsonText) {
+        String text = jsonUnescape(escapedJsonText);
+        String title = extractJsonString(text, "title", "AI提案レシピ");
+        String[] ings = extractJsonStringArray(text, "ingredients");
+
+        StringBuilder joined = new StringBuilder();
+        for (String ing : ings) {
+            String cleaned = stripBrackets(ing);
+            if (cleaned.isEmpty()) continue;
+            if (joined.length() > 0) joined.append(",");
+            joined.append(cleaned);
+        }
+        return new String[]{stripBrackets(title), joined.toString()};
+    }
+
+    /** "key":"value" 形式の文字列値を抽出する */
+    private String extractJsonString(String text, String key, String fallback) {
+        int keyIdx = text.indexOf("\"" + key + "\"");
+        if (keyIdx == -1) return fallback;
+        int colonIdx = text.indexOf(":", keyIdx);
+        if (colonIdx == -1) return fallback;
+        int valStart = text.indexOf("\"", colonIdx);
+        if (valStart == -1) return fallback;
+        valStart++;
+        int valEnd = findUnescapedQuote(text, valStart);
+        if (valEnd == -1) return fallback;
+        return text.substring(valStart, valEnd);
+    }
+
+    /** "key":["v1","v2",...] 形式の文字列配列を抽出する */
+    private String[] extractJsonStringArray(String text, String key) {
+        int keyIdx = text.indexOf("\"" + key + "\"");
+        if (keyIdx == -1) return new String[0];
+        int arrStart = text.indexOf("[", keyIdx);
+        if (arrStart == -1) return new String[0];
+        int arrEnd = text.indexOf("]", arrStart);
+        if (arrEnd == -1) return new String[0];
+
+        ArrayList<String> items = new ArrayList<>();
+        int pos = arrStart + 1;
+        while (pos < arrEnd) {
+            int strStart = text.indexOf("\"", pos);
+            if (strStart == -1 || strStart >= arrEnd) break;
+            int strEnd = findUnescapedQuote(text, strStart + 1);
+            if (strEnd == -1 || strEnd > arrEnd) break;
+            items.add(text.substring(strStart + 1, strEnd));
+            pos = strEnd + 1;
+        }
+        return items.toArray(new String[0]);
+    }
+
+    /** pos以降でエスケープされていない最初の '"' の位置を返す。見つからなければ -1 */
+    protected static int findUnescapedQuote(String s, int pos) {
+        while (pos < s.length()) {
+            char c = s.charAt(pos);
+            if (c == '\\') {
+                pos += 2;
+                continue;
+            }
+            if (c == '"') return pos;
+            pos++;
+        }
+        return -1;
+    }
+
+    /** Java文字列をJSON文字列値として埋め込めるようエスケープする */
+    protected static String jsonEscape(String s) {
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\': sb.append("\\\\"); break;
+                case '"':  sb.append("\\\""); break;
+                case '\n': sb.append("\\n");  break;
+                case '\r': sb.append("\\r");  break;
+                case '\t': sb.append("\\t");  break;
+                case '\b': sb.append("\\b");  break;
+                case '\f': sb.append("\\f");  break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
+    }
+
+    /** JSON文字列値内のエスケープを解除する */
+    protected static String jsonUnescape(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char next = s.charAt(i + 1);
+                switch (next) {
+                    case '\\': sb.append('\\'); i++; break;
+                    case '"':  sb.append('"');  i++; break;
+                    case '/':  sb.append('/');  i++; break;
+                    case 'n':  sb.append('\n'); i++; break;
+                    case 'r':  sb.append('\r'); i++; break;
+                    case 't':  sb.append('\t'); i++; break;
+                    case 'b':  sb.append('\b'); i++; break;
+                    case 'f':  sb.append('\f'); i++; break;
+                    case 'u':
+                        if (i + 5 < s.length()) {
+                            try {
+                                int code = Integer.parseInt(s.substring(i + 2, i + 6), 16);
+                                sb.append((char) code);
+                                i += 5;
+                            } catch (NumberFormatException e) {
+                                sb.append(c);
+                            }
+                        } else {
+                            sb.append(c);
+                        }
+                        break;
+                    default: sb.append(c);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * AIがプレースホルダや装飾を含めた場合のために角括弧・カギカッコ・先頭の箇条書き記号などを除去する
+     */
+    protected String stripBrackets(String s) {
+        return s.replaceAll("[\\[\\]【】「」]", "")
+                .replaceAll("^[\\s\\-*\\u30FB・]+", "")
+                .trim();
+    }
 }

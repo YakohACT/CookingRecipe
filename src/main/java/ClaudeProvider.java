@@ -2,15 +2,22 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 
+/**
+ * Anthropic Claude API との通信を担当するクラス。
+ * プロンプト側でJSON出力を強制している(API側にJSONモードはないため)。
+ */
 public class ClaudeProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
         String prompt = buildPrompt(url, allIngredients);
-        // ダブルクォートのみエスケープ（\n はすでにJSON用エスケープ済みのため二重エスケープしない）
-        String safePrompt = prompt.replace("\"", "\\\"");
-        String json = "{\"model\":\"" + modelName + "\",\"max_tokens\":1024,\"messages\":"
-                + "[{\"role\":\"user\",\"content\":\"" + safePrompt + "\"}]}";
+        String safePrompt = jsonEscape(prompt);
+        String json = "{"
+                + "\"model\":\"" + modelName + "\","
+                + "\"max_tokens\":1024,"
+                + "\"temperature\":0.3,"
+                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + safePrompt + "\"}]"
+                + "}";
 
         HttpURLConnection conn = (HttpURLConnection) new URL("https://api.anthropic.com/v1/messages").openConnection();
         conn.setRequestMethod("POST");
@@ -22,7 +29,6 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
             os.write(json.getBytes("utf-8"));
         }
 
-        // HTTPエラー時はエラーストリームから詳細メッセージを取得
         int responseCode = conn.getResponseCode();
         if (responseCode != HttpURLConnection.HTTP_OK) {
             String errorBody = readStream(conn.getErrorStream());
@@ -31,7 +37,7 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
 
         String jsonRes = readStream(conn.getInputStream());
 
-        // "text":"..." の開始位置を特定（コロン後の空白有無に対応）
+        // content[0].text からJSON文字列を抜き出す（コロン後の空白有無に対応）
         int keyIdx = jsonRes.indexOf("\"text\":");
         if (keyIdx == -1) {
             throw new Exception("レスポンス解析失敗: textフィールドが見つかりません。レスポンス: " + jsonRes);
@@ -41,14 +47,12 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
             throw new Exception("レスポンス解析失敗: textフィールドの値が見つかりません。レスポンス: " + jsonRes);
         }
         int start = valueQuote + 1;
-
-        // バックスラッシュエスケープを考慮して終端クォートを探す
         int end = findUnescapedQuote(jsonRes, start);
+        if (end == -1) throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
 
-        return parseStandardResponse(jsonRes.substring(start, end));
+        return parseJsonResponse(jsonRes.substring(start, end));
     }
 
-    /** ストリームを読み込んで文字列として返す。nullの場合は空文字を返す */
     private String readStream(InputStream stream) throws IOException {
         if (stream == null) return "";
         StringBuilder sb = new StringBuilder();
@@ -59,26 +63,12 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
         return sb.toString();
     }
 
-    /** pos 以降でエスケープされていない最初の '"' の位置を返す */
-    private int findUnescapedQuote(String s, int pos) throws Exception {
-        while (pos < s.length()) {
-            char c = s.charAt(pos);
-            if (c == '\\') {
-                pos += 2; // エスケープシーケンスをスキップ
-                continue;
-            }
-            if (c == '"') return pos;
-            pos++;
-        }
-        throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
-    }
-
     @Override
     public String[] getAvailableModels() {
         // 2026年4月時点のアクティブモデル (claude-sonnet-4 / claude-opus-4 は2026/4/20退役済み)
         return new String[]{
-                "claude-opus-4-7",        // 最高性能・最新フラッグシップ
-                "claude-sonnet-4-6",      // 速度と性能のバランス
+                "claude-opus-4-7",          // 最高性能・最新フラッグシップ
+                "claude-sonnet-4-6",        // 速度と性能のバランス
                 "claude-haiku-4-5-20251001" // 最高速・低コスト
         };
     }
