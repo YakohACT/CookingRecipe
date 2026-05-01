@@ -31,21 +31,32 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + cleanKey;
         String json = "{\"contents\": [{\"parts\":[" + partsJson + "]}]}";
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        conn.setDoOutput(true);
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(json.getBytes(StandardCharsets.UTF_8));
-        }
+        int maxRetries = 3;
+        int delayMs = 2000;
+        String jsonRes = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
+            int responseCode = conn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                jsonRes = readStream(conn.getInputStream());
+                break;
+            }
             String errorBody = readStream(conn.getErrorStream());
+            // 503はサーバー過負荷による一時的なエラーのためリトライする
+            if (responseCode == 503 && attempt < maxRetries) {
+                Thread.sleep(delayMs);
+                delayMs *= 2;
+                continue;
+            }
             throw new Exception("Gemini API エラー (HTTP " + responseCode + "): " + errorBody);
         }
-
-        String jsonRes = readStream(conn.getInputStream());
 
         int start = jsonRes.indexOf("\"text\":");
         if (start == -1) throw new Exception("レスポンス解析失敗: textフィールドが見つかりません");

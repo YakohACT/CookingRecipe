@@ -1,11 +1,67 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
+' ===== UI 層 =====
 class SwingMain {
+    - allRecipeList: AllRecipeList
+    - ingredientMaster: IngredientMaster
+    - centerPanel: JPanel
     - currentAiProvider: RecipeAIService.Provider
     - currentApiKey: String
+    - currentModelName: String
+    + showPanel(panel: JPanel): void
+    + showWelcome(): void
+    + getAllRecipeList(): AllRecipeList
+    + getIngredientMaster(): IngredientMaster
+    + getCurrentAiProvider(): RecipeAIService.Provider
+    + getCurrentApiKey(): String
+    + getCurrentModelName(): String
 }
 
+class RegisterRecipePanel {
+    - owner: SwingMain
+    - titleField: JTextField
+    - urlField: JTextField
+    - selectedListModel: DefaultListModel<Ingredient>
+    - requestAiSuggestion(btn: JButton): void
+    - applyAiResult(result: String[]): void
+    - submitRecipe(): void
+}
+
+class ViewRecipePanel {
+    - owner: SwingMain
+    - buildTitleTab(): JPanel
+    - buildIngredientTab(): JPanel
+}
+
+class DeleteRecipePanel {
+}
+
+class SettingsPanel {
+    - updateModelCombo(providerCombo, modelCombo): void
+}
+
+class Theme <<utility>> {
+    + {static} COLOR_PRIMARY: Color
+    + {static} COLOR_BG: Color
+    + {static} COLOR_SIDE: Color
+    + {static} COLOR_TEXT_LIGHT: Color
+    + {static} COLOR_DELETE: Color
+    + {static} COLOR_AI: Color
+    + {static} FONT_MAIN: Font
+    + {static} FONT_TITLE: Font
+}
+
+class UIComponents <<utility>> {
+    + {static} createStyledTextField(): JTextField
+    + {static} createStyledRecipeList(model): JList<Recipe>
+    + {static} createDetailArea(): JTextArea
+    + {static} updateDetailArea(area, recipe): void
+    + {static} addLeftAligned(panel, comp): void
+    + {static} createPrimaryButton(text): JButton
+}
+
+' ===== ドメイン層 =====
 enum IngredientCategory {
     VEGETABLE
     MEAT
@@ -47,42 +103,72 @@ class AllRecipeList {
     + write(): void
 }
 
+' ===== AI サービス層 =====
 class RecipeAIService {
     - selectedProvider: Provider
     - apiKey: String
-    + setConfig(provider: Provider, apiKey: String): void
-    + suggestRecipe(allIngredients: ArrayList<Ingredient>): String[]
+    - modelName: String
+    + setConfig(provider, apiKey, modelName): void
+    + suggestRecipe(url, allIngredients): String[]
+    + getModelsForProvider(provider): String[]
 }
 
 abstract class AbstractRecipeAIProvider {
-    + {abstract} generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
-    # buildPrompt(allIngredients: ArrayList<Ingredient>): String
+    + {abstract} generateRecipe(apiKey, modelName, url, allIngredients): String[]
+    + {abstract} getAvailableModels(): String[]
+    # buildPrompt(url, allIngredients): String
     # parseStandardResponse(text: String): String[]
+    - stripBrackets(s: String): String
 }
 
 class OpenAIProvider {
-    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+    + generateRecipe(...): String[]
+    + getAvailableModels(): String[]
 }
 
 class GeminiProvider {
-    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+    + generateRecipe(...): String[]
+    + getAvailableModels(): String[]
 }
 
 class ClaudeProvider {
-    + generateRecipe(apiKey: String, allIngredients: ArrayList<Ingredient>): String[]
+    + generateRecipe(...): String[]
+    + getAvailableModels(): String[]
 }
 
-' 関連性（SwingMain は RecipeAIService だけを知っていれば良い）
+' ===== 関連 =====
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
-SwingMain ..> RecipeAIService : uses
+SwingMain o--> RegisterRecipePanel : creates >
+SwingMain o--> ViewRecipePanel : creates >
+SwingMain o--> DeleteRecipePanel : creates >
+SwingMain o--> SettingsPanel : creates >
+
+RegisterRecipePanel ..> SwingMain
+ViewRecipePanel    ..> SwingMain
+DeleteRecipePanel  ..> SwingMain
+SettingsPanel      ..> SwingMain
+
+RegisterRecipePanel ..> RecipeAIService : uses
+SettingsPanel       ..> RecipeAIService : uses
+
+RegisterRecipePanel ..> UIComponents
+ViewRecipePanel     ..> UIComponents
+DeleteRecipePanel   ..> UIComponents
+SettingsPanel       ..> UIComponents
+SwingMain           ..> Theme
+RegisterRecipePanel ..> Theme
+ViewRecipePanel     ..> Theme
+DeleteRecipePanel   ..> Theme
+SettingsPanel       ..> Theme
+
 RecipeAIService o--> AbstractRecipeAIProvider : delegates to >
 AllRecipeList "1" *-- "many" Recipe
 Recipe "many" o-- "many" Ingredient
 Ingredient "many" -- "1" IngredientCategory
 IngredientMaster "1" *-- "many" Ingredient
 
-' 継承（各AIクラスは共通基盤を拡張する）
+' 継承
 AbstractRecipeAIProvider <|-- OpenAIProvider
 AbstractRecipeAIProvider <|-- GeminiProvider
 AbstractRecipeAIProvider <|-- ClaudeProvider
