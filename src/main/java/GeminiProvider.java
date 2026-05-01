@@ -8,7 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
- * Google Gemini との通信を担当するクラス
+ * Google Gemini との通信を担当するクラス。
+ * responseSchema による構造化JSON出力を強制することで、
+ * 食材リストから外れたレシピや余計な装飾文を返さないようにしている。
  */
 public class GeminiProvider extends AbstractRecipeAIProvider {
 
@@ -16,48 +18,79 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
         String cleanKey = apiKey.trim();
         String prompt = buildPrompt(url, allIngredients);
+        String safePrompt = jsonEscape(prompt);
 
-        // buildPrompt の \n はすでにJSONエスケープ済みのため、バックスラッシュを二重エスケープしない。
-        // ダブルクォートと制御文字のみエスケープする。
-        String safePrompt = prompt.replace("\"", "\\\"").replace("\r", "");
+        StringBuilder partsJson = new StringBuilder();
+        partsJson.append("{\"text\":\"").append(safePrompt).append("\"}");
 
-        String partsJson = "{\"text\":\"" + safePrompt + "\"}";
-
+        // YouTube URL の場合のみ動画自体を入力に添付する
         if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
-            String safeUrl = url.trim().replace("\"", "\\\"");
-            partsJson += ", {\"file_data\": {\"file_uri\": \"" + safeUrl + "\"}}";
+            String safeUrl = jsonEscape(url.trim());
+            partsJson.append(",{\"file_data\":{\"file_uri\":\"").append(safeUrl).append("\"}}");
         }
 
-        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + cleanKey;
-        String json = "{\"contents\": [{\"parts\":[" + partsJson + "]}]}";
+        // 構造化出力で {title, ingredients[]} のJSONを必ず返させ、温度を下げて安定化する
+        String generationConfig = "\"generationConfig\":{"
+                + "\"responseMimeType\":\"application/json\","
+                + "\"responseSchema\":{"
+                +   "\"type\":\"OBJECT\","
+                +   "\"properties\":{"
+                +     "\"title\":{\"type\":\"STRING\"},"
+                +     "\"ingredients\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"STRING\"}}"
+                +   "},"
+                +   "\"required\":[\"title\",\"ingredients\"]"
+                + "},"
+                + "\"temperature\":0.3"
+                + "}";
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        conn.setDoOutput(true);
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(json.getBytes(StandardCharsets.UTF_8));
-        }
+        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
+                + ":generateContent?key=" + cleanKey;
+        String json = "{\"contents\":[{\"parts\":[" + partsJson + "]}]," + generationConfig + "}";
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            String errorBody = readStream(conn.getErrorStream());
-            throw new Exception("Gemini API エラー (HTTP " + responseCode + "): " + errorBody);
-        }
+        String jsonRes = postWithRetry(urlStr, json);
 
-        String jsonRes = readStream(conn.getInputStream());
-
-        int start = jsonRes.indexOf("\"text\":");
-        if (start == -1) throw new Exception("レスポンス解析失敗: textフィールドが見つかりません");
-        start = jsonRes.indexOf("\"", start + 7) + 1;
-
-        // バックスラッシュエスケープを考慮して終端クォートを探す
+        // candidates[0].content.parts[0].text からJSON文字列を抜き出す
+        int keyIdx = jsonRes.indexOf("\"text\":");
+        if (keyIdx == -1) throw new Exception("レスポンス解析失敗: textフィールドが見つかりません。レスポンス: " + jsonRes);
+        int valueQuote = jsonRes.indexOf("\"", keyIdx + 7);
+        if (valueQuote == -1) throw new Exception("レスポンス解析失敗: textフィールドの値が見つかりません。レスポンス: " + jsonRes);
+        int start = valueQuote + 1;
         int end = findUnescapedQuote(jsonRes, start);
+        if (end == -1) throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
 
-        return parseStandardResponse(jsonRes.substring(start, end));
+        return parseJsonResponse(jsonRes.substring(start, end));
     }
 
-    /** ストリームを読み込んで文字列として返す。nullの場合は空文字を返す */
+    /**
+     * 503 (一時的サーバー過負荷) の場合は指数バックオフでリトライする
+     */
+    private String postWithRetry(String urlStr, String json) throws Exception {
+        int maxRetries = 3;
+        int delayMs = 2000;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                return readStream(conn.getInputStream());
+            }
+            String errorBody = readStream(conn.getErrorStream());
+            if (responseCode == 503 && attempt < maxRetries) {
+                Thread.sleep(delayMs);
+                delayMs *= 2;
+                continue;
+            }
+            throw new Exception("Gemini API エラー (HTTP " + responseCode + "): " + errorBody);
+        }
+        throw new Exception("Gemini API エラー: リトライ上限に到達しました");
+    }
+
     private String readStream(InputStream stream) throws Exception {
         if (stream == null) return "";
         StringBuilder sb = new StringBuilder();
@@ -66,20 +99,6 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
             while ((line = br.readLine()) != null) sb.append(line);
         }
         return sb.toString();
-    }
-
-    /** pos 以降でエスケープされていない最初の '"' の位置を返す */
-    private int findUnescapedQuote(String s, int pos) throws Exception {
-        while (pos < s.length()) {
-            char c = s.charAt(pos);
-            if (c == '\\') {
-                pos += 2; // エスケープシーケンスをスキップ
-                continue;
-            }
-            if (c == '"') return pos;
-            pos++;
-        }
-        throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
     }
 
     @Override

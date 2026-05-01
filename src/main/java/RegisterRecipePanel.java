@@ -1,0 +1,172 @@
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.util.ArrayList;
+
+/**
+ * 新規レシピ登録画面パネル（AI自動提案機能付き）
+ */
+public class RegisterRecipePanel extends JPanel {
+
+    private final SwingMain owner;
+    private final JTextField titleField = UIComponents.createStyledTextField();
+    private final JTextField urlField = UIComponents.createStyledTextField();
+    private final DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
+
+    public RegisterRecipePanel(SwingMain owner) {
+        this.owner = owner;
+        setLayout(new BorderLayout());
+
+        JPanel form = new JPanel();
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
+        form.setBackground(Color.WHITE);
+        form.setBorder(new EmptyBorder(30, 50, 30, 50));
+
+        JButton btnAi = buildAiButton();
+        form.add(buildHeader(btnAi));
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        JComboBox<IngredientCategory> catCombo = new JComboBox<>(IngredientCategory.values());
+        catCombo.setFont(Theme.FONT_MAIN);
+        catCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+
+        DefaultListModel<Ingredient> masterListModel = new DefaultListModel<>();
+        JList<Ingredient> masterIngList = new JList<>(masterListModel);
+
+        JList<Ingredient> selectedIngList = new JList<>(selectedListModel);
+
+        catCombo.addActionListener(e -> {
+            IngredientCategory cat = (IngredientCategory) catCombo.getSelectedItem();
+            masterListModel.clear();
+            if (cat != null) {
+                for (Ingredient ing : owner.getIngredientMaster().searchIngredient(cat)) {
+                    masterListModel.addElement(ing);
+                }
+            }
+        });
+
+        JButton btnAdd = new JButton("選択した食材を追加");
+        btnAdd.addActionListener(e -> {
+            Ingredient selected = masterIngList.getSelectedValue();
+            if (selected != null && !selectedListModel.contains(selected)) {
+                selectedListModel.addElement(selected);
+            }
+        });
+
+        btnAi.addActionListener(e -> requestAiSuggestion(btnAi));
+
+        JButton btnSubmit = UIComponents.createPrimaryButton("レシピを保存");
+        btnSubmit.addActionListener(e -> submitRecipe());
+
+        UIComponents.addLeftAligned(form, new JLabel("タイトル:"));
+        UIComponents.addLeftAligned(form, titleField);
+        form.add(Box.createRigidArea(new Dimension(0, 10)));
+        UIComponents.addLeftAligned(form, new JLabel("URL (YouTubeのURLを入力するとAIが動画を参考にします):"));
+        UIComponents.addLeftAligned(form, urlField);
+        form.add(Box.createRigidArea(new Dimension(0, 10)));
+        UIComponents.addLeftAligned(form, new JLabel("カテゴリから食材を選択:"));
+        UIComponents.addLeftAligned(form, catCombo);
+
+        JScrollPane mScroll = new JScrollPane(masterIngList);
+        mScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        form.add(mScroll);
+        UIComponents.addLeftAligned(form, btnAdd);
+
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+        UIComponents.addLeftAligned(form, new JLabel("使用する食材:"));
+        JScrollPane sScroll = new JScrollPane(selectedIngList);
+        sScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        form.add(sScroll);
+
+        form.add(Box.createRigidArea(new Dimension(0, 20)));
+        UIComponents.addLeftAligned(form, btnSubmit);
+
+        add(new JScrollPane(form), BorderLayout.CENTER);
+    }
+
+    private JPanel buildHeader(JButton btnAi) {
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(Color.WHITE);
+        headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel titleLabel = new JLabel("新規レシピ登録");
+        titleLabel.setFont(Theme.FONT_TITLE);
+        headerPanel.add(titleLabel, BorderLayout.WEST);
+        headerPanel.add(btnAi, BorderLayout.EAST);
+        return headerPanel;
+    }
+
+    private JButton buildAiButton() {
+        JButton btnAi = new JButton("✨ AI自動提案");
+        btnAi.setBackground(Theme.COLOR_AI);
+        btnAi.setForeground(Color.WHITE);
+        btnAi.setOpaque(true);
+        btnAi.setBorderPainted(false);
+        btnAi.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btnAi;
+    }
+
+    private void requestAiSuggestion(JButton btnAi) {
+        if (owner.getCurrentApiKey().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキーを入力してください");
+            return;
+        }
+        btnAi.setText("生成中...");
+        btnAi.setEnabled(false);
+
+        SwingWorker<String[], Void> worker = new SwingWorker<>() {
+            @Override
+            protected String[] doInBackground() throws Exception {
+                RecipeAIService aiService = new RecipeAIService();
+                aiService.setConfig(owner.getCurrentAiProvider(), owner.getCurrentApiKey(), owner.getCurrentModelName());
+                return aiService.suggestRecipe(urlField.getText().trim(), owner.getIngredientMaster().getAllIngredients());
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    applyAiResult(get());
+                    JOptionPane.showMessageDialog(RegisterRecipePanel.this, "AIがレシピを提案しました");
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(RegisterRecipePanel.this,
+                            "AIの呼び出しに失敗しました。\n設定内容やコンソールのエラーを確認してください。",
+                            "エラー", JOptionPane.ERROR_MESSAGE);
+                    ex.printStackTrace();
+                } finally {
+                    btnAi.setText("✨ AI自動提案");
+                    btnAi.setEnabled(true);
+                }
+            }
+        };
+        worker.execute();
+    }
+
+    private void applyAiResult(String[] result) {
+        titleField.setText(result[0]);
+        selectedListModel.clear();
+        for (String aiIngName : result[1].split(",")) {
+            String cleanName = aiIngName.trim();
+            for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) {
+                if (ing.getName().equals(cleanName) && !selectedListModel.contains(ing)) {
+                    selectedListModel.addElement(ing);
+                }
+            }
+        }
+    }
+
+    private void submitRecipe() {
+        String title = titleField.getText().trim();
+        String url = urlField.getText().trim();
+
+        if (title.isEmpty() || url.isEmpty() || selectedListModel.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "入力されていない箇所があります", "入力エラー", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        ArrayList<Ingredient> ings = new ArrayList<>();
+        for (int i = 0; i < selectedListModel.size(); i++) ings.add(selectedListModel.getElementAt(i));
+        owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings));
+        JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
+        owner.showWelcome();
+    }
+}
