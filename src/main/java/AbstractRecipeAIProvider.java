@@ -20,21 +20,34 @@ public abstract class AbstractRecipeAIProvider {
                 .map(Ingredient::getName)
                 .collect(Collectors.joining(", "));
 
+        boolean isYoutube = url.contains("youtube.com") || url.contains("youtu.be");
+        // YouTube以外のURLは file_data として渡せないため、HTMLを取得して
+        // テキストとしてプロンプトに添付する
+        String pageText = "";
+        if (!isYoutube && !url.trim().isEmpty()) {
+            pageText = WebPageFetcher.fetchSummary(url);
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("あなたは日本の家庭料理のシェフです。\n\n");
         sb.append("【利用可能な食材】\n");
         sb.append(names).append("\n\n");
+        if (!pageText.isEmpty()) {
+            sb.append("【参考レシピページ(指定URLから取得)】\n");
+            sb.append(pageText).append("\n\n");
+        }
         sb.append("【ルール】\n");
         sb.append("・上記リストに含まれる食材だけを使うこと\n");
-        sb.append("・食材は必ず正確に3つ選ぶこと\n");
         sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
-        if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
-            sb.append("・添付された動画の料理ジャンルや雰囲気を参考にすること\n");
+        if (isYoutube) {
+            sb.append("・動画の内容を参考にすること\n");
+        } else if (!pageText.isEmpty()) {
+            sb.append("・参考レシピページの料理を再現するように料理名と食材を選ぶこと\n");
         }
         sb.append("\n【出力形式】\n");
         sb.append("以下のキーを持つJSONオブジェクトのみを返してください。\n");
         sb.append("- title: 料理名 (文字列)\n");
-        sb.append("- ingredients: 上記リストから選んだ食材名3つの配列 (文字列の配列)\n");
+        sb.append("- ingredients: 上記リストから選んだ食材名 (文字列の配列)\n");
         return sb.toString();
     }
 
@@ -44,7 +57,8 @@ public abstract class AbstractRecipeAIProvider {
      */
     protected String[] parseJsonResponse(String escapedJsonText) {
         String text = jsonUnescape(escapedJsonText);
-        String title = extractJsonString(text, "title", "AI提案レシピ");
+        // フォールバックを空文字にすることで、UI側で「AIがレシピを検出できなかった」状態を判定できるようにする
+        String title = extractJsonString(text, "title", "");
         String[] ings = extractJsonStringArray(text, "ingredients");
 
         StringBuilder joined = new StringBuilder();

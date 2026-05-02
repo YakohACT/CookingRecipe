@@ -125,8 +125,10 @@ public class RegisterRecipePanel extends JPanel {
             @Override
             protected void done() {
                 try {
-                    applyAiResult(get());
-                    JOptionPane.showMessageDialog(RegisterRecipePanel.this, "AIがレシピを提案しました");
+                    if (applyAiResult(get())) {
+                        JOptionPane.showMessageDialog(RegisterRecipePanel.this, "AIがレシピを提案しました");
+                    }
+                    // 検出できなかった場合はフォームを書き換えず、ダイアログも出さない
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(RegisterRecipePanel.this,
                             "AIの呼び出しに失敗しました。\n設定内容やコンソールのエラーを確認してください。",
@@ -141,17 +143,36 @@ public class RegisterRecipePanel extends JPanel {
         worker.execute();
     }
 
-    private void applyAiResult(String[] result) {
-        titleField.setText(result[0]);
-        selectedListModel.clear();
-        for (String aiIngName : result[1].split(",")) {
+    /**
+     * AIの返したレシピをフォームに反映する。
+     * タイトルが空、または食材マスタとマッチする食材が0個の場合は
+     * 「検出できなかった」と判断し、フォームには一切手を加えず false を返す
+     */
+    private boolean applyAiResult(String[] result) {
+        String aiTitle = (result == null || result.length < 1 || result[0] == null) ? "" : result[0].trim();
+        String aiIngsRaw = (result == null || result.length < 2 || result[1] == null) ? "" : result[1];
+
+        ArrayList<Ingredient> matched = new ArrayList<>();
+        for (String aiIngName : aiIngsRaw.split(",")) {
             String cleanName = aiIngName.trim();
+            if (cleanName.isEmpty()) continue;
             for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) {
-                if (ing.getName().equals(cleanName) && !selectedListModel.contains(ing)) {
-                    selectedListModel.addElement(ing);
+                if (ing.getName().equals(cleanName) && !matched.contains(ing)) {
+                    matched.add(ing);
                 }
             }
         }
+
+        if (aiTitle.isEmpty() || matched.isEmpty()) {
+            return false;
+        }
+
+        titleField.setText(aiTitle);
+        selectedListModel.clear();
+        for (Ingredient ing : matched) {
+            selectedListModel.addElement(ing);
+        }
+        return true;
     }
 
     private void submitRecipe() {
