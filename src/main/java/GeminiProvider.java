@@ -23,10 +23,16 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         StringBuilder partsJson = new StringBuilder();
         partsJson.append("{\"text\":\"").append(safePrompt).append("\"}");
 
-        // YouTube URL の場合のみ動画自体を入力に添付する
+        // YouTube URL の場合のみ動画自体を入力に添付する。
+        // mime_type を明示しないとGeminiがURLを汎用Web取得として扱い、
+        // YouTube が返す text/html を「Unsupported MIME type」として弾くため必須。
+        // また list= や index= 等の余計なクエリが付いていると INVALID_ARGUMENT になるので、
+        // 動画IDだけ抜き出して canonical な watch?v=... URL に正規化する。
         if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
-            String safeUrl = jsonEscape(url.trim());
-            partsJson.append(",{\"file_data\":{\"file_uri\":\"").append(safeUrl).append("\"}}");
+            String canonical = canonicalYoutubeUrl(url.trim());
+            String safeUrl = jsonEscape(canonical);
+            partsJson.append(",{\"file_data\":{\"mime_type\":\"video/mp4\",\"file_uri\":\"")
+                     .append(safeUrl).append("\"}}");
         }
 
         // 構造化出力で {title, ingredients[]} のJSONを必ず返させ、温度を下げて安定化する
@@ -89,6 +95,37 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
             throw new Exception("Gemini API エラー (HTTP " + responseCode + "): " + errorBody);
         }
         throw new Exception("Gemini API エラー: リトライ上限に到達しました");
+    }
+
+    /**
+     * YouTube URL から動画IDだけ抜き出して canonical な watch?v=... に変換する。
+     * playlist や index などの余計なクエリ、Shorts/embed/youtu.be 形式に対応。
+     * 解析できない場合は原文をそのまま返す
+     */
+    static String canonicalYoutubeUrl(String url) {
+        String videoId = extractYoutubeVideoId(url);
+        if (videoId == null) return url;
+        return "https://www.youtube.com/watch?v=" + videoId;
+    }
+
+    private static String extractYoutubeVideoId(String url) {
+        // youtu.be/<id>
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "youtu\\.be/([A-Za-z0-9_-]{6,})").matcher(url);
+        if (m.find()) return m.group(1);
+        // youtube.com/shorts/<id>
+        m = java.util.regex.Pattern.compile(
+                "youtube\\.com/shorts/([A-Za-z0-9_-]{6,})").matcher(url);
+        if (m.find()) return m.group(1);
+        // youtube.com/embed/<id>
+        m = java.util.regex.Pattern.compile(
+                "youtube\\.com/embed/([A-Za-z0-9_-]{6,})").matcher(url);
+        if (m.find()) return m.group(1);
+        // ?v=<id> or &v=<id>
+        m = java.util.regex.Pattern.compile(
+                "[?&]v=([A-Za-z0-9_-]{6,})").matcher(url);
+        if (m.find()) return m.group(1);
+        return null;
     }
 
     private String readStream(InputStream stream) throws Exception {
