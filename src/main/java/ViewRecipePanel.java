@@ -26,7 +26,6 @@ public class ViewRecipePanel extends JPanel {
     private JPanel buildTitleTab() {
         JPanel titleTab = new JPanel(new BorderLayout(20, 20));
         titleTab.setBorder(new EmptyBorder(20, 20, 20, 20));
-        titleTab.setBackground(Color.WHITE);
 
         DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
         for (Recipe r : owner.getAllRecipeList().getRecipeList()) recipeListModel.addElement(r);
@@ -46,7 +45,6 @@ public class ViewRecipePanel extends JPanel {
 
     private JPanel buildIngredientTab() {
         JPanel ingTab = new JPanel(new BorderLayout(20, 20));
-        ingTab.setBackground(Color.WHITE);
         ingTab.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         DefaultListModel<Ingredient> searchCondModel = new DefaultListModel<>();
@@ -95,7 +93,6 @@ public class ViewRecipePanel extends JPanel {
 
         JPanel searchToolBox = new JPanel();
         searchToolBox.setLayout(new BoxLayout(searchToolBox, BoxLayout.Y_AXIS));
-        searchToolBox.setBackground(Color.WHITE);
         searchToolBox.setPreferredSize(new Dimension(300, 0));
 
         UIComponents.addLeftAligned(searchToolBox, new JLabel("1. カテゴリ選択:"));
@@ -124,7 +121,6 @@ public class ViewRecipePanel extends JPanel {
     private JPanel buildCategoryTab() {
         JPanel tab = new JPanel(new BorderLayout(20, 20));
         tab.setBorder(new EmptyBorder(20, 20, 20, 20));
-        tab.setBackground(Color.WHITE);
 
         DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
         JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
@@ -152,14 +148,14 @@ public class ViewRecipePanel extends JPanel {
         refresh.run();
 
         JPanel topRow = new JPanel(new BorderLayout(10, 0));
-        topRow.setBackground(Color.WHITE);
+        topRow.setOpaque(false);
         JLabel catLabel = new JLabel("カテゴリー:");
         catLabel.setFont(Theme.FONT_MAIN);
         topRow.add(catLabel, BorderLayout.WEST);
         topRow.add(categoryCombo, BorderLayout.CENTER);
 
         JPanel leftPanel = new JPanel(new BorderLayout(10, 10));
-        leftPanel.setBackground(Color.WHITE);
+        leftPanel.setOpaque(false);
         leftPanel.setPreferredSize(new Dimension(280, 0));
         leftPanel.add(topRow, BorderLayout.NORTH);
         leftPanel.add(new JScrollPane(recipeListView), BorderLayout.CENTER);

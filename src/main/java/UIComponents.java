@@ -27,8 +27,11 @@ public final class UIComponents {
                 label.setBackground(Theme.COLOR_PRIMARY);
                 label.setForeground(Color.WHITE);
             } else {
-                label.setBackground(Color.WHITE);
-                label.setForeground(Color.BLACK);
+                // テーマ(Light/Dark)に追従するために UIManager から色を取得
+                Color bg = UIManager.getColor("List.background");
+                Color fg = UIManager.getColor("List.foreground");
+                label.setBackground(bg != null ? bg : Color.WHITE);
+                label.setForeground(fg != null ? fg : Color.BLACK);
             }
             return label;
         });

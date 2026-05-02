@@ -9,7 +9,6 @@ public class DeleteRecipePanel extends JPanel {
 
     public DeleteRecipePanel(SwingMain owner) {
         setLayout(new BorderLayout(10, 10));
-        setBackground(Color.WHITE);
         setBorder(new EmptyBorder(30, 50, 30, 50));
 
         DefaultListModel<Recipe> listModel = new DefaultListModel<>();

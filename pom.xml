@@ -36,5 +36,11 @@
             <artifactId>slf4j-nop</artifactId>
             <version>2.0.13</version>
         </dependency>
+        <!-- モダンなフラット Look and Feel (Light/Dark 両対応) -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.4.1</version>
+        </dependency>
     </dependencies>
 </project>

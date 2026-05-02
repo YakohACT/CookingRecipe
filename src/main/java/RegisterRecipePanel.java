@@ -21,7 +21,6 @@ public class RegisterRecipePanel extends JPanel {
 
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setBackground(Color.WHITE);
         form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
         JButton btnAi = buildAiButton();
@@ -98,7 +97,7 @@ public class RegisterRecipePanel extends JPanel {
 
     private JPanel buildHeader(JButton btnAi) {
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
+        headerPanel.setOpaque(false);
         headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel titleLabel = new JLabel("新規レシピ登録");

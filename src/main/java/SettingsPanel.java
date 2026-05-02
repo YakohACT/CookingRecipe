@@ -3,7 +3,9 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
 /**
- * AI利用設定画面パネル
+ * AI利用設定画面パネル。
+ * APIキーは ChatGPT / Gemini / Claude それぞれで個別に保存され、
+ * プロバイダーを切替えると該当プロバイダーの保存済みキーが復元される。
  */
 public class SettingsPanel extends JPanel {
 
@@ -12,7 +14,6 @@ public class SettingsPanel extends JPanel {
 
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setBackground(Color.WHITE);
         form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
         JLabel titleLabel = new JLabel("AI利用設定");
@@ -32,23 +33,30 @@ public class SettingsPanel extends JPanel {
         modelCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         UIComponents.addLeftAligned(form, modelCombo);
 
-        providerCombo.addActionListener(e -> updateModelCombo(providerCombo, modelCombo));
-        updateModelCombo(providerCombo, modelCombo);
-        modelCombo.setSelectedItem(owner.getCurrentModelName());
-
         form.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        UIComponents.addLeftAligned(form, new JLabel("APIキー:"));
-        JPasswordField keyField = new JPasswordField(owner.getCurrentApiKey());
+        UIComponents.addLeftAligned(form, new JLabel("APIキー (プロバイダーごとに別々に保存されます):"));
+        JPasswordField keyField = new JPasswordField();
         keyField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         UIComponents.addLeftAligned(form, keyField);
+
+        // プロバイダー切替時にモデル一覧と該当プロバイダーのAPIキーを再読み込み
+        Runnable refreshForProvider = () -> {
+            RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
+            updateModelCombo(p, modelCombo);
+            keyField.setText(p == null ? "" : owner.getApiKeyFor(p));
+        };
+        providerCombo.addActionListener(e -> refreshForProvider.run());
+        refreshForProvider.run();
+        modelCombo.setSelectedItem(owner.getCurrentModelName());
 
         form.add(Box.createRigidArea(new Dimension(0, 30)));
         JButton btnSave = UIComponents.createPrimaryButton("設定を保存");
         btnSave.addActionListener(e -> {
-            owner.setCurrentAiProvider((RecipeAIService.Provider) providerCombo.getSelectedItem());
+            RecipeAIService.Provider selected = (RecipeAIService.Provider) providerCombo.getSelectedItem();
+            owner.setCurrentAiProvider(selected);
             owner.setCurrentModelName((String) modelCombo.getSelectedItem());
-            owner.setCurrentApiKey(new String(keyField.getPassword()).trim());
+            owner.setApiKeyFor(selected, new String(keyField.getPassword()).trim());
             JOptionPane.showMessageDialog(this, "設定を保存しました");
             owner.showWelcome();
         });
@@ -57,15 +65,11 @@ public class SettingsPanel extends JPanel {
         add(new JScrollPane(form), BorderLayout.CENTER);
     }
 
-    /**
-     * 選択中のプロバイダーが対応するモデル一覧をモデル用コンボボックスに反映する
-     */
-    private void updateModelCombo(JComboBox<RecipeAIService.Provider> providerCombo, JComboBox<String> modelCombo) {
+    /** 指定プロバイダーが対応するモデル一覧をモデル用コンボボックスに反映する */
+    private void updateModelCombo(RecipeAIService.Provider provider, JComboBox<String> modelCombo) {
         modelCombo.removeAllItems();
-        RecipeAIService.Provider selectedProvider = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-
-        RecipeAIService service = new RecipeAIService();
-        String[] availableModels = service.getModelsForProvider(selectedProvider);
+        if (provider == null) return;
+        String[] availableModels = new RecipeAIService().getModelsForProvider(provider);
         for (String model : availableModels) {
             modelCombo.addItem(model);
         }
