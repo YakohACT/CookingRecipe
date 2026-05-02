@@ -48,7 +48,11 @@ public final class UIComponents {
         String ings = recipe.getIngredients().stream()
                 .map(Ingredient::getName)
                 .collect(Collectors.joining(", "));
+        String categories = recipe.getCategories().stream()
+                .map(RecipeCategory::getDisplayName)
+                .collect(Collectors.joining(", "));
         area.setText("【レシピ名】\n" + recipe.getTitle()
+                + "\n\n【カテゴリー】\n" + categories
                 + "\n\n【URL】\n" + recipe.getUrl()
                 + "\n\n【必要食材】\n" + ings);
     }

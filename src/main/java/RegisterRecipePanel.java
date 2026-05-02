@@ -2,6 +2,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.EnumSet;
 
 /**
  * 新規レシピ登録画面パネル（AI自動提案機能付き）
@@ -11,6 +12,7 @@ public class RegisterRecipePanel extends JPanel {
     private final SwingMain owner;
     private final JTextField titleField = UIComponents.createStyledTextField();
     private final JTextField urlField = UIComponents.createStyledTextField();
+    private final JList<RecipeCategory> categoryList = new JList<>(RecipeCategory.values());
     private final DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
 
     public RegisterRecipePanel(SwingMain owner) {
@@ -58,11 +60,21 @@ public class RegisterRecipePanel extends JPanel {
         JButton btnSubmit = UIComponents.createPrimaryButton("レシピを保存");
         btnSubmit.addActionListener(e -> submitRecipe());
 
+        categoryList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        categoryList.setVisibleRowCount(6);
+        categoryList.setFont(Theme.FONT_MAIN);
+        JScrollPane categoryScroll = new JScrollPane(categoryList);
+        categoryScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 130));
+        categoryScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         UIComponents.addLeftAligned(form, new JLabel("タイトル:"));
         UIComponents.addLeftAligned(form, titleField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
         UIComponents.addLeftAligned(form, new JLabel("URL (YouTubeのURLを入力するとAIが動画を参考にします):"));
         UIComponents.addLeftAligned(form, urlField);
+        form.add(Box.createRigidArea(new Dimension(0, 10)));
+        UIComponents.addLeftAligned(form, new JLabel("レシピのカテゴリー (Ctrl+クリックで複数選択可):"));
+        form.add(categoryScroll);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
         UIComponents.addLeftAligned(form, new JLabel("カテゴリから食材を選択:"));
         UIComponents.addLeftAligned(form, catCombo);
@@ -186,7 +198,14 @@ public class RegisterRecipePanel extends JPanel {
 
         ArrayList<Ingredient> ings = new ArrayList<>();
         for (int i = 0; i < selectedListModel.size(); i++) ings.add(selectedListModel.getElementAt(i));
-        owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings));
+
+        EnumSet<RecipeCategory> categories = EnumSet.noneOf(RecipeCategory.class);
+        for (RecipeCategory cat : categoryList.getSelectedValuesList()) {
+            categories.add(cat);
+        }
+        if (categories.isEmpty()) categories.add(RecipeCategory.OTHER);
+
+        owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings, categories));
         JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
         owner.showWelcome();
     }

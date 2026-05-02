@@ -18,6 +18,7 @@ public class ViewRecipePanel extends JPanel {
         tabs.setFont(Theme.FONT_MAIN);
         tabs.addTab("タイトルから検索", buildTitleTab());
         tabs.addTab("食材から検索", buildIngredientTab());
+        tabs.addTab("カテゴリーから検索", buildCategoryTab());
 
         add(tabs, BorderLayout.CENTER);
     }
@@ -115,5 +116,56 @@ public class ViewRecipePanel extends JPanel {
         ingTab.add(searchToolBox, BorderLayout.WEST);
         ingTab.add(resultPanel, BorderLayout.CENTER);
         return ingTab;
+    }
+
+    /**
+     * カテゴリー選択でレシピを絞り込む3つ目のタブ
+     */
+    private JPanel buildCategoryTab() {
+        JPanel tab = new JPanel(new BorderLayout(20, 20));
+        tab.setBorder(new EmptyBorder(20, 20, 20, 20));
+        tab.setBackground(Color.WHITE);
+
+        DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
+        JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
+        JTextArea detailArea = UIComponents.createDetailArea();
+
+        recipeListView.addListSelectionListener(e -> {
+            Recipe selected = recipeListView.getSelectedValue();
+            if (selected != null) UIComponents.updateDetailArea(detailArea, selected);
+        });
+
+        JComboBox<RecipeCategory> categoryCombo = new JComboBox<>(RecipeCategory.values());
+        categoryCombo.setFont(Theme.FONT_MAIN);
+
+        Runnable refresh = () -> {
+            RecipeCategory selected = (RecipeCategory) categoryCombo.getSelectedItem();
+            recipeListModel.clear();
+            detailArea.setText("");
+            if (selected != null) {
+                for (Recipe r : owner.getAllRecipeList().getRecipeList()) {
+                    if (r.getCategories().contains(selected)) recipeListModel.addElement(r);
+                }
+            }
+        };
+        categoryCombo.addActionListener(e -> refresh.run());
+        refresh.run();
+
+        JPanel topRow = new JPanel(new BorderLayout(10, 0));
+        topRow.setBackground(Color.WHITE);
+        JLabel catLabel = new JLabel("カテゴリー:");
+        catLabel.setFont(Theme.FONT_MAIN);
+        topRow.add(catLabel, BorderLayout.WEST);
+        topRow.add(categoryCombo, BorderLayout.CENTER);
+
+        JPanel leftPanel = new JPanel(new BorderLayout(10, 10));
+        leftPanel.setBackground(Color.WHITE);
+        leftPanel.setPreferredSize(new Dimension(280, 0));
+        leftPanel.add(topRow, BorderLayout.NORTH);
+        leftPanel.add(new JScrollPane(recipeListView), BorderLayout.CENTER);
+
+        tab.add(leftPanel, BorderLayout.WEST);
+        tab.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        return tab;
     }
 }
