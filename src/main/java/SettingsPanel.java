@@ -40,22 +40,27 @@ public class SettingsPanel extends JPanel {
         keyField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         UIComponents.addLeftAligned(form, keyField);
 
-        // プロバイダー切替時にモデル一覧と該当プロバイダーのAPIキーを再読み込み
+        // プロバイダー切替時に、そのプロバイダーで保存済みのモデル/APIキーを再読み込み
         Runnable refreshForProvider = () -> {
             RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
             updateModelCombo(p, modelCombo);
-            keyField.setText(p == null ? "" : owner.getApiKeyFor(p));
+            if (p != null) {
+                String savedModel = owner.getModelFor(p);
+                if (!savedModel.isEmpty()) modelCombo.setSelectedItem(savedModel);
+                keyField.setText(owner.getApiKeyFor(p));
+            } else {
+                keyField.setText("");
+            }
         };
         providerCombo.addActionListener(e -> refreshForProvider.run());
         refreshForProvider.run();
-        modelCombo.setSelectedItem(owner.getCurrentModelName());
 
         form.add(Box.createRigidArea(new Dimension(0, 30)));
         JButton btnSave = UIComponents.createPrimaryButton("設定を保存");
         btnSave.addActionListener(e -> {
             RecipeAIService.Provider selected = (RecipeAIService.Provider) providerCombo.getSelectedItem();
             owner.setCurrentAiProvider(selected);
-            owner.setCurrentModelName((String) modelCombo.getSelectedItem());
+            owner.setModelFor(selected, (String) modelCombo.getSelectedItem());
             owner.setApiKeyFor(selected, new String(keyField.getPassword()).trim());
             JOptionPane.showMessageDialog(this, "設定を保存しました");
             owner.showWelcome();

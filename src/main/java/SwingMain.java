@@ -34,7 +34,6 @@ public class SwingMain extends JFrame {
     private final ApiKeyStore apiKeyStore;
 
     private RecipeAIService.Provider currentAiProvider = RecipeAIService.Provider.OPENAI;
-    private String currentModelName = "gpt-4o-mini";
 
     private boolean darkMode;
     private JButton themeButton;
@@ -188,8 +187,34 @@ public class SwingMain extends JFrame {
     public String getApiKeyFor(RecipeAIService.Provider p) { return apiKeyStore.getKey(p); }
     /** 指定プロバイダーのAPIキーを暗号化して保存(空文字なら削除) */
     public void setApiKeyFor(RecipeAIService.Provider p, String plainKey) { apiKeyStore.setKey(p, plainKey); }
-    public String getCurrentModelName() { return currentModelName; }
-    public void setCurrentModelName(String m) { this.currentModelName = m; }
+
+    /**
+     * 現在選択中プロバイダーの利用モデル名を返す。
+     * 保存値が無い場合はそのプロバイダーの先頭モデル(getAvailableModels()[0])にフォールバック
+     */
+    public String getCurrentModelName() { return getModelFor(currentAiProvider); }
+
+    public String getModelFor(RecipeAIService.Provider p) {
+        if (p == null) return "";
+        String saved = PREFS.get("aiModel." + p.name(), "");
+        if (!saved.isEmpty()) return saved;
+        // 未設定のときはそのプロバイダーの最初の利用可能モデルにフォールバック
+        String[] models = new RecipeAIService().getModelsForProvider(p);
+        return models.length > 0 ? models[0] : "";
+    }
+
+    /** 指定プロバイダーの利用モデル名を保存する */
+    public void setModelFor(RecipeAIService.Provider p, String model) {
+        if (p == null) return;
+        if (model == null || model.isEmpty()) {
+            PREFS.remove("aiModel." + p.name());
+        } else {
+            PREFS.put("aiModel." + p.name(), model);
+        }
+    }
+
+    /** 互換用: 現在のプロバイダーに対してモデルを保存 */
+    public void setCurrentModelName(String m) { setModelFor(currentAiProvider, m); }
 
     public static void main(String[] args) {
         // 起動時に保存されたテーマを適用(無ければLight)
