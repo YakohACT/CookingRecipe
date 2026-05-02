@@ -96,11 +96,22 @@ class IngredientMaster {
 }
 
 class AllRecipeList {
+    - repository: RecipeRepository
     - recipeList: ArrayList<Recipe>
     + addRecipe(recipe: Recipe): void
     + deleteRecipe(recipe: Recipe): void
-    + read(): void
-    + write(): void
+    + read(): void  // no-op (互換用)
+    + write(): void // no-op (互換用)
+}
+
+class RecipeRepository {
+    - dbPath: String
+    - ingredientMaster: IngredientMaster
+    + {static} resolveDbPath(): String
+    + findAll(): List<Recipe>
+    + insert(recipe: Recipe): long
+    + delete(id: long): void
+    - ensureSchema(): void
 }
 
 ' ===== AI サービス層 =====
@@ -164,6 +175,9 @@ SettingsPanel       ..> Theme
 
 RecipeAIService o--> AbstractRecipeAIProvider : delegates to >
 AllRecipeList "1" *-- "many" Recipe
+AllRecipeList --> RecipeRepository : uses
+RecipeRepository ..> IngredientMaster : looks up
+RecipeRepository ..> Recipe : <<persists to SQLite>>
 Recipe "many" o-- "many" Ingredient
 Ingredient "many" -- "1" IngredientCategory
 IngredientMaster "1" *-- "many" Ingredient

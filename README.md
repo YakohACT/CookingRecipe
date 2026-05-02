@@ -8,15 +8,32 @@
 そんなあなたに！このアプリ！URLの題名とURLと食材を保存するだけだけれども無いよりかは便利！
 
 # 実行方法
-ターミナル上で対象のフォルダ上で
+
+## IntelliJ など Maven 対応IDE
+pom.xml の依存(`google-genai`, `sqlite-jdbc`)を解決してから `SwingMain` を実行してください。
+
+## 生 javac で動かす場合
+sqlite-jdbc は SLF4J に依存しているため、3つの jar を `lib/` に揃える必要があります（同梱済み）:
+
+| ファイル | 役割 |
+|---|---|
+| `lib/sqlite-jdbc-3.45.3.0.jar` | SQLite JDBCドライバ |
+| `lib/slf4j-api-2.0.13.jar` | SLF4J API (sqlite-jdbc 必須) |
+| `lib/slf4j-nop-2.0.13.jar` | SLF4J no-op バインディング (ログ出力を抑止) |
+
+### Windows (PowerShell / cmd)
 ```
-javac *.java
+javac -encoding UTF-8 -cp "lib\sqlite-jdbc-3.45.3.0.jar" -d out src\main\java\*.java
+java -cp "out;lib\sqlite-jdbc-3.45.3.0.jar;lib\slf4j-api-2.0.13.jar;lib\slf4j-nop-2.0.13.jar" SwingMain
 ```
-を実行し、
+
+### Mac / Linux
 ```
-java SwingMain
+javac -encoding UTF-8 -cp "lib/sqlite-jdbc-3.45.3.0.jar" -d out src/main/java/*.java
+java -cp "out:lib/sqlite-jdbc-3.45.3.0.jar:lib/slf4j-api-2.0.13.jar:lib/slf4j-nop-2.0.13.jar" SwingMain
 ```
-を実行すると起動します.~~はよjarファイル作れ~~
+
+レシピは初回起動時に作成される `recipes.db` (SQLite) に保存されます。`recipes.dat` (旧形式) はもう使われません。
 
 ---
 # 使い方

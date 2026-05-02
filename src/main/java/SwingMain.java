@@ -18,8 +18,9 @@ public class SwingMain extends JFrame {
     private String currentModelName = "gpt-4o-mini";
 
     public SwingMain() {
-        allRecipeList = new AllRecipeList();
+        // IngredientMaster を先に初期化し、AllRecipeList(SQLite読込)の食材名解決に渡す
         ingredientMaster = new IngredientMaster();
+        allRecipeList = new AllRecipeList(ingredientMaster);
 
         setTitle("Recipe Manager Pro");
         setSize(1000, 750);

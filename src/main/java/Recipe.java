@@ -1,14 +1,15 @@
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 
 /**
  * レシピ情報を管理するクラス。
  * 1つのレシピは複数のカテゴリーを持つことができる。
+ * 永続化は SQLite が担当するため Serializable は実装しない。
+ * id はDB主キー(0は未永続化を表す)。
  */
-public class Recipe implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class Recipe {
 
+    private long id;
     private String title;
     private String url;
     private ArrayList<Ingredient> ingredients;
@@ -28,11 +29,13 @@ public class Recipe implements Serializable {
         this(title, url, ingredients, EnumSet.of(RecipeCategory.OTHER));
     }
 
+    public long getId() { return id; }
+    public void setId(long id) { this.id = id; }
+
     public String getTitle() { return title; }
     public String getUrl() { return url; }
     public ArrayList<Ingredient> getIngredients() { return ingredients; }
 
-    /** categories が null(旧データから読み込んだ場合)のときは OTHER のみのSetを返す */
     public EnumSet<RecipeCategory> getCategories() {
         if (categories == null || categories.isEmpty()) return EnumSet.of(RecipeCategory.OTHER);
         return EnumSet.copyOf(categories);
