@@ -86,7 +86,9 @@ enum IngredientCategory {
     MEAT
     SEAFOOD
     CARBOHYDRATE
+    FRUIT
     MILK
+    PICKLES
     OTHER
     SEASONING
 }

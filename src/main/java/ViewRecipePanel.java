@@ -31,7 +31,7 @@ public class ViewRecipePanel extends JPanel {
         for (Recipe r : owner.getAllRecipeList().getRecipeList()) recipeListModel.addElement(r);
 
         JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
-        JTextArea detailArea = UIComponents.createDetailArea();
+        JEditorPane detailArea = UIComponents.createDetailArea();
 
         recipeListView.addListSelectionListener(e -> {
             Recipe selected = recipeListView.getSelectedValue();
@@ -54,7 +54,7 @@ public class ViewRecipePanel extends JPanel {
         JList<Ingredient> searchCondList = new JList<>(searchCondModel);
         JList<Ingredient> masterSearchList = new JList<>(masterSearchModel);
         JList<Recipe> resultListView = UIComponents.createStyledRecipeList(resultListModel);
-        JTextArea searchDetailArea = UIComponents.createDetailArea();
+        JEditorPane searchDetailArea = UIComponents.createDetailArea();
 
         JComboBox<IngredientCategory> searchCatCombo = new JComboBox<>(IngredientCategory.values());
         searchCatCombo.setFont(Theme.FONT_MAIN);
@@ -124,7 +124,7 @@ public class ViewRecipePanel extends JPanel {
 
         DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
         JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
-        JTextArea detailArea = UIComponents.createDetailArea();
+        JEditorPane detailArea = UIComponents.createDetailArea();
 
         recipeListView.addListSelectionListener(e -> {
             Recipe selected = recipeListView.getSelectedValue();
