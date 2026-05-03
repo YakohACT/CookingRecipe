@@ -186,6 +186,22 @@ class WebPageFetcher <<utility>> {
     - {static} htmlToText(html: String): String
 }
 
+class YoutubeMetadataFetcher <<utility>> {
+    + {static} fetchSummary(url: String): String
+    - {static} extractVideoId(url: String): String
+    - {static} fetchTitle(videoUrl: String): String
+    - {static} fetchTranscript(videoId: String): String
+    - {static} parseTranscriptXml(xml: String): String
+}
+
+note right of YoutubeMetadataFetcher
+  oEmbed でタイトル取得 +
+  watch ページから captionTracks を抽出して
+  字幕(timedtext)を取得・テキスト化。
+  Ollama等の動画非対応モデル向けに
+  プロンプトへ動画情報を注入する
+end note
+
 ' ===== 暗号化キーストア層 =====
 class SecureKeyStore {
     - {static} ALGO: String = "AES/GCM/NoPadding"
@@ -344,6 +360,7 @@ RegisterRecipePanel ..> ApiKeyStore  : reads key for current provider
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
 RecipeAIService     +-- Provider
 AbstractRecipeAIProvider ..> WebPageFetcher : fetches non-YouTube URL
+AbstractRecipeAIProvider ..> YoutubeMetadataFetcher : fetches YouTube title+transcript
 AbstractRecipeAIProvider ..> Ingredient
 GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
 

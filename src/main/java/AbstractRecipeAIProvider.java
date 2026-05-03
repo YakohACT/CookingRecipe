@@ -21,11 +21,15 @@ public abstract class AbstractRecipeAIProvider {
                 .collect(Collectors.joining(", "));
 
         boolean isYoutube = url.contains("youtube.com") || url.contains("youtu.be");
-        // YouTube以外のURLは file_data として渡せないため、HTMLを取得して
-        // テキストとしてプロンプトに添付する
+        // 参考情報の取得:
+        //   - YouTube URL → oEmbedで動画タイトル + watchページから字幕を取得
+        //     (Geminiは別途file_dataで動画自体も渡すが、Ollama等の動画非対応モデルへの保険)
+        //   - YouTube以外 → HTMLを取得してテキスト化(WebPageFetcher)
         String pageText = "";
-        if (!isYoutube && !url.trim().isEmpty()) {
-            pageText = WebPageFetcher.fetchSummary(url);
+        if (!url.trim().isEmpty()) {
+            pageText = isYoutube
+                    ? YoutubeMetadataFetcher.fetchSummary(url)
+                    : WebPageFetcher.fetchSummary(url);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -33,14 +37,19 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("【利用可能な食材】\n");
         sb.append(names).append("\n\n");
         if (!pageText.isEmpty()) {
-            sb.append("【参考レシピページ(指定URLから取得)】\n");
+            sb.append(isYoutube ? "【参考動画(指定URLから取得)】\n" : "【参考レシピページ(指定URLから取得)】\n");
             sb.append(pageText).append("\n\n");
         }
         sb.append("【ルール】\n");
         sb.append("・上記リストに含まれる食材だけを使うこと\n");
         sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
         if (isYoutube) {
-            sb.append("・動画の内容を参考にすること\n");
+            if (!pageText.isEmpty()) {
+                sb.append("・上記の動画タイトル/字幕の料理を再現するように料理名と食材を選ぶこと\n");
+            } else {
+                // タイトル/字幕が取れなかったケース: Gemini系の動画ネイティブ理解にフォールバック
+                sb.append("・動画の内容を参考にすること\n");
+            }
         } else if (!pageText.isEmpty()) {
             sb.append("・参考レシピページの料理を再現するように料理名と食材を選ぶこと\n");
         }
