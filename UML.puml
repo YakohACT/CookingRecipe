@@ -37,10 +37,14 @@ end note
 
 class RegisterRecipePanel {
     - owner: SwingMain
+    - editTarget: Recipe
     - titleField: JTextField
     - urlField: JTextField
     - categoryList: JList<RecipeCategory>
     - selectedListModel: DefaultListModel<Ingredient>
+    + RegisterRecipePanel(owner)
+    + RegisterRecipePanel(owner, editTarget: Recipe)
+    - prefillFromRecipe(r: Recipe): void
     - requestAiSuggestion(btn: JButton): void
     - applyAiResult(result: String[]): boolean
     - submitRecipe(): void
@@ -51,6 +55,7 @@ class ViewRecipePanel {
     - buildTitleTab(): JPanel
     - buildIngredientTab(): JPanel
     - buildCategoryTab(): JPanel
+    - detailWithEditButton(detail, source): JPanel
 }
 
 class DeleteRecipePanel {
@@ -146,6 +151,7 @@ class AllRecipeList {
     - repository: RecipeRepository
     - recipeList: ArrayList<Recipe>
     + addRecipe(recipe: Recipe): void
+    + updateRecipe(recipe: Recipe): void
     + deleteRecipe(recipe: Recipe): void
     + getRecipeList(): ArrayList<Recipe>
     + read(): void  // no-op (互換用)
@@ -159,6 +165,7 @@ class RecipeRepository {
     + {static} resolveDbPath(): String
     + findAll(): List<Recipe>
     + insert(recipe: Recipe): long
+    + update(recipe: Recipe): void
     + delete(id: long): void
     - ensureSchema(): void
     - connect(): Connection
@@ -221,6 +228,7 @@ enum "RecipeAIService.Provider" as Provider {
     OPENAI
     GEMINI
     CLAUDE
+    OLLAMA
 }
 
 abstract class AbstractRecipeAIProvider {
@@ -252,6 +260,33 @@ class ClaudeProvider {
     + getAvailableModels(): String[]
 }
 
+abstract class OllamaProvider {
+    # {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
+    + generateRecipe(apiKey, modelName, url, ings): String[]
+}
+
+note right of OllamaProvider
+  ローカルLLM Ollama 用の基底クラス。
+  /api/chat に format:"json" で問い合わせ、
+  各モデルファミリは具象サブクラスで列挙
+end note
+
+class LlamaProvider {
+    + getAvailableModels(): String[]
+}
+class GemmaProvider {
+    + getAvailableModels(): String[]
+}
+class MistralProvider {
+    + getAvailableModels(): String[]
+}
+class PhiProvider {
+    + getAvailableModels(): String[]
+}
+class QwenProvider {
+    + getAvailableModels(): String[]
+}
+
 ' ===== 関連 =====
 ' --- UI層 ---
 SwingMain --> AllRecipeList
@@ -260,6 +295,7 @@ SwingMain o--> RegisterRecipePanel : creates >
 SwingMain o--> ViewRecipePanel    : creates >
 SwingMain o--> DeleteRecipePanel  : creates >
 SwingMain o--> SettingsPanel      : creates >
+ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 
 RegisterRecipePanel ..> SwingMain
 ViewRecipePanel     ..> SwingMain
@@ -315,5 +351,11 @@ GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
 AbstractRecipeAIProvider <|-- OpenAIProvider
 AbstractRecipeAIProvider <|-- GeminiProvider
 AbstractRecipeAIProvider <|-- ClaudeProvider
+AbstractRecipeAIProvider <|-- OllamaProvider
+OllamaProvider <|-- LlamaProvider
+OllamaProvider <|-- GemmaProvider
+OllamaProvider <|-- MistralProvider
+OllamaProvider <|-- PhiProvider
+OllamaProvider <|-- QwenProvider
 
 @enduml

@@ -4,11 +4,36 @@ import java.awt.*;
 import java.util.ArrayList;
 
 /**
- * レシピ閲覧画面パネル（タイトル検索/食材検索の2タブ構成）
+ * レシピ閲覧画面パネル（タイトル検索/食材検索/カテゴリ検索の3タブ構成）。
+ * 各タブで選択中のレシピを編集パネルへ送る「編集」ボタンを持つ
  */
 public class ViewRecipePanel extends JPanel {
 
     private final SwingMain owner;
+
+    /**
+     * 詳細表示エリア + 「編集」ボタンを縦に並べたパネルを生成する。
+     * source の選択が無いときは編集ボタンが無効化される
+     */
+    private JPanel detailWithEditButton(JEditorPane detail, JList<Recipe> source) {
+        JPanel container = new JPanel(new BorderLayout(0, 8));
+        container.setOpaque(false);
+        container.add(new JScrollPane(detail), BorderLayout.CENTER);
+
+        JButton btnEdit = UIComponents.createPrimaryButton("選択中のレシピを編集");
+        btnEdit.setEnabled(false);
+        btnEdit.addActionListener(e -> {
+            Recipe r = source.getSelectedValue();
+            if (r != null) owner.showPanel(new RegisterRecipePanel(owner, r));
+        });
+        source.addListSelectionListener(e -> btnEdit.setEnabled(source.getSelectedValue() != null));
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        bottom.setOpaque(false);
+        bottom.add(btnEdit);
+        container.add(bottom, BorderLayout.SOUTH);
+        return container;
+    }
 
     public ViewRecipePanel(SwingMain owner) {
         this.owner = owner;
@@ -39,7 +64,7 @@ public class ViewRecipePanel extends JPanel {
         });
 
         titleTab.add(new JScrollPane(recipeListView), BorderLayout.WEST);
-        titleTab.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        titleTab.add(detailWithEditButton(detailArea, recipeListView), BorderLayout.CENTER);
         return titleTab;
     }
 
@@ -107,8 +132,9 @@ public class ViewRecipePanel extends JPanel {
         UIComponents.addLeftAligned(searchToolBox, btnSearch);
 
         JPanel resultPanel = new JPanel(new BorderLayout(10, 10));
+        resultPanel.setOpaque(false);
         resultPanel.add(new JScrollPane(resultListView), BorderLayout.WEST);
-        resultPanel.add(new JScrollPane(searchDetailArea), BorderLayout.CENTER);
+        resultPanel.add(detailWithEditButton(searchDetailArea, resultListView), BorderLayout.CENTER);
 
         ingTab.add(searchToolBox, BorderLayout.WEST);
         ingTab.add(resultPanel, BorderLayout.CENTER);
@@ -161,7 +187,7 @@ public class ViewRecipePanel extends JPanel {
         leftPanel.add(new JScrollPane(recipeListView), BorderLayout.CENTER);
 
         tab.add(leftPanel, BorderLayout.WEST);
-        tab.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        tab.add(detailWithEditButton(detailArea, recipeListView), BorderLayout.CENTER);
         return tab;
     }
 }

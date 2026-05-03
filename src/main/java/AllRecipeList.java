@@ -37,6 +37,19 @@ public class AllRecipeList {
         recipeList.remove(recipe);
     }
 
+    /**
+     * 既存レシピを更新する。SQLiteと同期し、メモリ上のリストの該当エントリも差し替える
+     */
+    public void updateRecipe(Recipe recipe) {
+        repository.update(recipe);
+        for (int i = 0; i < recipeList.size(); i++) {
+            if (recipeList.get(i).getId() == recipe.getId()) {
+                recipeList.set(i, recipe);
+                return;
+            }
+        }
+    }
+
     /** SQLite移行に伴い不要になったが、既存呼び出し(終了時など)を壊さないよう no-op として残す */
     public void write() {}
 

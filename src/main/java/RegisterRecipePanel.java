@@ -5,18 +5,25 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 
 /**
- * 新規レシピ登録画面パネル（AI自動提案機能付き）
+ * レシピ登録/編集画面パネル（AI自動提案機能付き）。
+ * editTarget が null なら新規登録、非nullなら既存レシピの更新として動作する
  */
 public class RegisterRecipePanel extends JPanel {
 
     private final SwingMain owner;
+    private final Recipe editTarget;
     private final JTextField titleField = UIComponents.createStyledTextField();
     private final JTextField urlField = UIComponents.createStyledTextField();
     private final JList<RecipeCategory> categoryList = new JList<>(RecipeCategory.values());
     private final DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
 
     public RegisterRecipePanel(SwingMain owner) {
+        this(owner, null);
+    }
+
+    public RegisterRecipePanel(SwingMain owner, Recipe editTarget) {
         this.owner = owner;
+        this.editTarget = editTarget;
         setLayout(new BorderLayout());
 
         JPanel form = new JPanel();
@@ -35,6 +42,8 @@ public class RegisterRecipePanel extends JPanel {
         JList<Ingredient> masterIngList = new JList<>(masterListModel);
 
         JList<Ingredient> selectedIngList = new JList<>(selectedListModel);
+        // Ctrl/Shift で複数選択 → 一度に解除できる
+        selectedIngList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 
         catCombo.addActionListener(e -> {
             IngredientCategory cat = (IngredientCategory) catCombo.getSelectedItem();
@@ -54,9 +63,18 @@ public class RegisterRecipePanel extends JPanel {
             }
         });
 
+        JButton btnRemove = new JButton("選択した食材を解除");
+        btnRemove.addActionListener(e -> {
+            int[] indices = selectedIngList.getSelectedIndices();
+            // 末尾から削除すると先のインデックスが崩れない
+            for (int i = indices.length - 1; i >= 0; i--) {
+                selectedListModel.remove(indices[i]);
+            }
+        });
+
         btnAi.addActionListener(e -> requestAiSuggestion(btnAi));
 
-        JButton btnSubmit = UIComponents.createPrimaryButton("レシピを保存");
+        JButton btnSubmit = UIComponents.createPrimaryButton(editTarget == null ? "レシピを保存" : "レシピを更新");
         btnSubmit.addActionListener(e -> submitRecipe());
 
         categoryList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
@@ -84,15 +102,39 @@ public class RegisterRecipePanel extends JPanel {
         UIComponents.addLeftAligned(form, btnAdd);
 
         form.add(Box.createRigidArea(new Dimension(0, 20)));
-        UIComponents.addLeftAligned(form, new JLabel("使用する食材:"));
+        UIComponents.addLeftAligned(form, new JLabel("使用する食材 (Ctrl+クリックで複数選択):"));
         JScrollPane sScroll = new JScrollPane(selectedIngList);
         sScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         form.add(sScroll);
+        UIComponents.addLeftAligned(form, btnRemove);
 
         form.add(Box.createRigidArea(new Dimension(0, 20)));
         UIComponents.addLeftAligned(form, btnSubmit);
 
+        // 編集モードのときは既存レシピの内容をフォームに復元
+        if (editTarget != null) {
+            prefillFromRecipe(editTarget);
+        }
+
         add(new JScrollPane(form), BorderLayout.CENTER);
+    }
+
+    /** 編集対象レシピでフォーム要素を初期化する */
+    private void prefillFromRecipe(Recipe r) {
+        titleField.setText(r.getTitle());
+        urlField.setText(r.getUrl());
+        for (Ingredient ing : r.getIngredients()) {
+            if (!selectedListModel.contains(ing)) selectedListModel.addElement(ing);
+        }
+        // カテゴリーJListの選択インデックスを同期
+        RecipeCategory[] all = RecipeCategory.values();
+        EnumSet<RecipeCategory> cats = r.getCategories();
+        int[] indices = new int[cats.size()];
+        int idx = 0;
+        for (int i = 0; i < all.length; i++) {
+            if (cats.contains(all[i])) indices[idx++] = i;
+        }
+        categoryList.setSelectedIndices(indices);
     }
 
     private JPanel buildHeader(JButton btnAi) {
@@ -100,7 +142,7 @@ public class RegisterRecipePanel extends JPanel {
         headerPanel.setOpaque(false);
         headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel titleLabel = new JLabel("新規レシピ登録");
+        JLabel titleLabel = new JLabel(editTarget == null ? "新規レシピ登録" : "レシピ編集");
         titleLabel.setFont(Theme.FONT_TITLE);
         headerPanel.add(titleLabel, BorderLayout.WEST);
         headerPanel.add(btnAi, BorderLayout.EAST);
@@ -118,7 +160,9 @@ public class RegisterRecipePanel extends JPanel {
     }
 
     private void requestAiSuggestion(JButton btnAi) {
-        if (owner.getCurrentApiKey().isEmpty()) {
+        // Ollama はローカルLLMなのでAPIキー不要。それ以外はAPIキー必須
+        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
+                && owner.getCurrentApiKey().isEmpty()) {
             JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキーを入力してください");
             return;
         }
@@ -204,8 +248,15 @@ public class RegisterRecipePanel extends JPanel {
         }
         if (categories.isEmpty()) categories.add(RecipeCategory.OTHER);
 
-        owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings, categories));
-        JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
+        if (editTarget == null) {
+            owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings, categories));
+            JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
+        } else {
+            Recipe updated = new Recipe(title, url, ings, categories);
+            updated.setId(editTarget.getId());
+            owner.getAllRecipeList().updateRecipe(updated);
+            JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を更新しました");
+        }
         owner.showWelcome();
     }
 }
