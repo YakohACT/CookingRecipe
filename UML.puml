@@ -1,7 +1,7 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
-' ===== UI 層 =====
+' ===== main.java.UI 層 =====
 class SwingMain {
     - {static} PREFS: Preferences
     - {static} FLATLAF_AVAILABLE: boolean

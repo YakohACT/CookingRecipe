@@ -3,24 +3,32 @@
 - Youtubeショートでやってみたいレシピあったけど忘れそう！
 - 家に残ってる野菜でなんか作れないかな？
 
-そんなことあるよね
-
-そんなあなたに！このアプリ！URLの題名とURLと食材を保存するだけだけれども無いよりかは便利！
+そんなあなたに！このアプリ！ネット上のレシピ前提のものは見たことないはず...たぶん...
 
 # 実行方法
 
-## Maven 対応IDE
-pom.xml の依存(`google-genai`, `sqlite-jdbc`)を解決してから `SwingMain` を実行してください。
+## batファイル(推奨起動方法)
+事前に **JDK 17 以降** がインストールされていることが前提です。
+
+`run.bat` をダブルクリックするだけで起動できます。初回は数秒のビルド後にウィンドウが開きます。
+
+| ファイル                | 用途                           |
+|---------------------|------------------------------|
+| **`run.bat`**       | アプリを起動（コンソール非表示）。初回はビルドも自動実行 |
+| **`run-debug.bat`** | コンソール付きで起動。エラー調査用            |
+
+## Maven 対応IDE 
+pom.xml の依存を解決して `SwingMain` を Run。`lib/` 配下の jar はリポジトリから自動取得されます。
 
 ## javac で動かす場合
 sqlite-jdbc は SLF4J に依存しているため、3つの jar を `lib/` に揃える必要があります（同梱済み）:
 
-| ファイル | 役割 |
-|---|---|
-| `lib/sqlite-jdbc-3.45.3.0.jar` | SQLite JDBCドライバ |
-| `lib/slf4j-api-2.0.13.jar` | SLF4J API (sqlite-jdbc 必須) |
-| `lib/slf4j-nop-2.0.13.jar` | SLF4J no-op バインディング (ログ出力を抑止) |
-| `lib/flatlaf-3.4.1.jar` | モダンな Look and Feel (Light/Dark 切替対応) |
+| ファイル                           | 役割                                   |
+|--------------------------------|--------------------------------------|
+| `lib/sqlite-jdbc-3.45.3.0.jar` | SQLite JDBCドライバ                      |
+| `lib/slf4j-api-2.0.13.jar`     | SLF4J API (sqlite-jdbc 必須)           |
+| `lib/slf4j-nop-2.0.13.jar`     | SLF4J no-op バインディング (ログ出力を抑止)        |
+| `lib/flatlaf-3.4.1.jar`        | モダンな Look and Feel (Light/Dark 切替対応) |
 
 ### Windows (PowerShell / cmd)
 ```
@@ -34,17 +42,74 @@ javac -encoding UTF-8 -cp "lib/sqlite-jdbc-3.45.3.0.jar:lib/flatlaf-3.4.1.jar" -
 java -cp "out:lib/sqlite-jdbc-3.45.3.0.jar:lib/slf4j-api-2.0.13.jar:lib/slf4j-nop-2.0.13.jar:lib/flatlaf-3.4.1.jar" SwingMain
 ```
 
-サイドメニューの「☾ ダークモード / ☀ ライトモード」ボタンでテーマを切り替えられます。選択は次回起動時にも引き継がれます (Java Preferences API に保存)。
-
-レシピは初回起動時に作成される `recipes.db` (SQLite) に保存されます。`recipes.dat` (旧形式) はもう使われません。
-
 ---
 # 使い方
-<img width="1200" src="Photo/RMP_default.png">
 
-まだ機能が少ないから見ればわかると思います.
+## 起動後
+![RMP_default.png](Photo/RMP_default.png)
 
-現在AI機能を実装中ですが、動作が不安定な状況なので注意
+サイドメニューの「☾ ダークモード / ☀ ライトモード」ボタンでテーマを切り替えられます。選択は次回起動時にも引き継がれます (Java Preferences API に保存)。
+
+## レシピ登録
+![RMP_Regist.png](Photo/RMP_Regist.png)
+
+タイトル、URL、食材を入力し、レシピ保存ボタンを押すと初回起動時に作成される `recipes.db` (SQLite) に保存されます。
+
+食材は既存のものから選択する方式であり、食材の追加をしたい場合は`database.csv`を編集してください。
+
+| カテゴリー名       | 想定カテゴリー |
+|--------------|---------|
+| VEGETABLE    | 野菜      |
+| MEAT         | 肉系      |
+| SEAFOOD      | 海鮮系     |
+| CARBOHYDRATE | 炭水化物    |
+| FRUIT        | 果物      |
+| MILK         | 乳製品     |
+| PICKLES      | 漬物、発酵食品 |
+| SEASONING    | 調味料     |
+| OTHER        | その他     |
+
+AIを登録している場合はURLを入力すると、自動的にタイトルと食材を入力します。(AIの設定は後に記述)
+
+## レシピ閲覧
+
+登録したレシピの閲覧ができます。 レシピは検索方法が3つ あります。
+
+表示されているURLはクリックするとブラウザーが起動します。
+
+また、"右下の選択中レシピを編集"から選択しているレシピを編集することができます。
+### タイトルから検索
+![RMP_View_Title.png](Photo/RMP_View_Title.png)
+左側でタイトルを選択すると、右側にレシピの詳細が表示されます。
+
+### 食材から検索
+![RMP_View_Ingredient.png](Photo/RMP_View_Ingredient.png)
+使いたい食材を選択して検索すると真ん中にレシピが表示されます。
+
+食材を複数選んだ場合は全て該当するレシピのみを行事します。
+
+### カテゴリーから検索
+![RMP_View_Category.png](Photo/RMP_View_Category.png)
+カテゴリーを選択するとそれに該当するレシピが表示されます。
+
+## レシピ削除
+![RMP_Delete.png](Photo/RMP_Delete.png)
+選んだレシピを削除することができます。
+
+## AI設定
+![RMP_AI.png](Photo/RMP_AI.png)
+レシピ登録で利用するAIの設定を行います。
+AIは4種類から選べます。
+- ChatGPT
+- Gemini
+- Claude
+- Ollama
+
+ChatGPTとGeminiとClaudeはAPIキーを用いて、オンラインで処理する方式です。利用可能なモデルやトークン数に注意してください。
+
+Ollamaはローカル環境で処理するものであり、利用デバイス上でOllamaを起動しておく必要があります。
+
+AI設定は保存されます。APIは暗号化した状態で保存します。
 
 ---
 ## メモ書き

@@ -1,3 +1,8 @@
+package main.java.UI;
+
+import main.java.SwingMain;
+import main.java.AI.RecipeAIService;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;

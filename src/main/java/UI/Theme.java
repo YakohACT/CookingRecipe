@@ -1,3 +1,5 @@
+package main.java.UI;
+
 import java.awt.Color;
 import java.awt.Font;
 

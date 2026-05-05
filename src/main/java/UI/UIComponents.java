@@ -1,3 +1,9 @@
+package main.java.UI;
+
+import main.java.Recipe.Ingredient;
+import main.java.Recipe.Recipe;
+import main.java.Recipe.RecipeCategory;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.HyperlinkEvent;

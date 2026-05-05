@@ -1,3 +1,7 @@
+package main.java.AI;
+
+import main.java.Recipe.Ingredient;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;

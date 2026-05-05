@@ -1,3 +1,16 @@
+package main.java;
+
+import main.java.AI.ApiKeyStore;
+import main.java.AI.RecipeAIService;
+import main.java.AI.SecureKeyStore;
+import main.java.Recipe.AllRecipeList;
+import main.java.Recipe.IngredientMaster;
+import main.java.UI.DeleteRecipePanel;
+import main.java.UI.RegisterRecipePanel;
+import main.java.UI.SettingsPanel;
+import main.java.UI.Theme;
+import main.java.UI.ViewRecipePanel;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;

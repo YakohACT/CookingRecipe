@@ -1,3 +1,12 @@
+package main.java.UI;
+
+import main.java.SwingMain;
+import main.java.AI.RecipeAIService;
+import main.java.Recipe.Ingredient;
+import main.java.Recipe.IngredientCategory;
+import main.java.Recipe.Recipe;
+import main.java.Recipe.RecipeCategory;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -87,7 +96,7 @@ public class RegisterRecipePanel extends JPanel {
         UIComponents.addLeftAligned(form, new JLabel("タイトル:"));
         UIComponents.addLeftAligned(form, titleField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
-        UIComponents.addLeftAligned(form, new JLabel("URL (YouTubeのURLを入力するとAIが動画を参考にします):"));
+        UIComponents.addLeftAligned(form, new JLabel("URL:"));
         UIComponents.addLeftAligned(form, urlField);
         form.add(Box.createRigidArea(new Dimension(0, 10)));
         UIComponents.addLeftAligned(form, new JLabel("レシピのカテゴリー (Ctrl+クリックで複数選択可):"));

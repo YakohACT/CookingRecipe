@@ -1,3 +1,5 @@
+package main.java.AI;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;

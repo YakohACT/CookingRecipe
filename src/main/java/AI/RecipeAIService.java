@@ -1,3 +1,8 @@
+package main.java.AI;
+
+import main.java.AI.Ollama.*;
+import main.java.Recipe.Ingredient;
+
 import java.util.ArrayList;
 
 /**
@@ -60,7 +65,7 @@ public class RecipeAIService {
 
     /**
      * モデル名のプレフィックスで Ollama サブクラスを振り分ける。
-     * 不明なモデル名は LlamaProvider をフォールバックとして利用(API挙動は同じ)
+     * 不明なモデル名は main.java.AI.Ollama.LlamaProvider をフォールバックとして利用(API挙動は同じ)
      */
     private static OllamaProvider ollamaProviderForModel(String modelName) {
         String lower = (modelName == null) ? "" : modelName.toLowerCase();

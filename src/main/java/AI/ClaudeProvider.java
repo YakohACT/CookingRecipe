@@ -1,3 +1,7 @@
+package main.java.AI;
+
+import main.java.Recipe.Ingredient;
+
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;

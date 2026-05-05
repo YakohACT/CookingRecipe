@@ -1,3 +1,7 @@
+package main.java.AI;
+
+import main.java.Recipe.Ingredient;
+
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
@@ -24,7 +28,7 @@ public abstract class AbstractRecipeAIProvider {
         // 参考情報の取得:
         //   - YouTube URL → oEmbedで動画タイトル + watchページから字幕を取得
         //     (Geminiは別途file_dataで動画自体も渡すが、Ollama等の動画非対応モデルへの保険)
-        //   - YouTube以外 → HTMLを取得してテキスト化(WebPageFetcher)
+        //   - YouTube以外 → HTMLを取得してテキスト化(main.java.AI.WebPageFetcher)
         String pageText = "";
         if (!url.trim().isEmpty()) {
             pageText = isYoutube
