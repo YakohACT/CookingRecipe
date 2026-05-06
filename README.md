@@ -86,7 +86,7 @@ AIを登録している場合はURLを入力すると、自動的にタイトル
 ![RMP_View_Ingredient.png](Photo/RMP_View_Ingredient.png)
 使いたい食材を選択して検索すると真ん中にレシピが表示されます。
 
-食材を複数選んだ場合は全て該当するレシピのみを行事します。
+食材を複数選んだ場合は全て該当するレシピのみを表示します。
 
 ### カテゴリーから検索
 ![RMP_View_Category.png](Photo/RMP_View_Category.png)
