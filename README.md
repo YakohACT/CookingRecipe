@@ -100,6 +100,7 @@ java -cp "out:lib/sqlite-jdbc-3.45.3.0.jar:lib/slf4j-api-2.0.13.jar:lib/slf4j-no
 | PICKLES      | 漬物、発酵食品 |
 | SEASONING    | 調味料     |
 | OTHER        | その他     |
+
 AIを登録している場合はURLを入力すると、自動的にタイトルと食材を入力します。(AIの設定は後に記述)
 
 ### レシピ閲覧
