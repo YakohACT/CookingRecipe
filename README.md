@@ -110,23 +110,28 @@ AIを登録している場合はURLを入力すると、自動的にタイトル
 また、"右下の選択中レシピを編集"から選択しているレシピを編集することができます。
 #### タイトルから検索
 ![RMP_View_Title.png](Photo/RMP_View_Title.png)
+
 左側でタイトルを選択すると、右側にレシピの詳細が表示されます。
 
 #### 食材から検索
 ![RMP_View_Ingredient.png](Photo/RMP_View_Ingredient.png)
+
 使いたい食材を選択して検索すると真ん中にレシピが表示されます。\
 食材を複数選んだ場合は全て該当するレシピのみを表示します。
 
 #### カテゴリーから検索
 ![RMP_View_Category.png](Photo/RMP_View_Category.png)
+
 カテゴリーを選択するとそれに該当するレシピが表示されます。
 
 ### レシピ削除
 ![RMP_Delete.png](Photo/RMP_Delete.png)
+
 選んだレシピを削除することができます。
 
 ### AI設定
 ![RMP_AI.png](Photo/RMP_AI.png)
+
 レシピ登録で利用するAIの設定を行います。
 AIは4種類から選べます。
 - ChatGPT
