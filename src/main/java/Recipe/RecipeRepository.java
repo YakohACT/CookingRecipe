@@ -37,6 +37,11 @@ public class RecipeRepository {
     private final String dbPath;
     private final IngredientMaster ingredientMaster;
 
+    /**
+     * 指定パスのSQLiteを開き、必要ならテーブルを作成する。
+     * @param dbPath           SQLite データベースファイルのパス
+     * @param ingredientMaster 読み込み時に食材名を解決するためのマスタ
+     */
     public RecipeRepository(String dbPath, IngredientMaster ingredientMaster) {
         this.dbPath = dbPath;
         this.ingredientMaster = ingredientMaster;
@@ -47,7 +52,8 @@ public class RecipeRepository {
 
     /**
      * recipes.db の探索順:
-     * カレント → CookingRecipe/ → 親ディレクトリ。見つからなければカレントに新規作成する
+     * カレント → CookingRecipe/ → 親ディレクトリ。見つからなければカレントに新規作成する。
+     * @return 既存ファイルのパス。どこにも無ければ "recipes.db"(カレント基準)
      */
     public static String resolveDbPath() {
         String[] candidates = {
@@ -62,10 +68,18 @@ public class RecipeRepository {
         return "recipes.db";
     }
 
+    /**
+     * SQLite への新規 JDBC 接続を確立する。
+     * @return 開いた状態の接続(呼び出し側で close すること)
+     * @throws SQLException 接続失敗時
+     */
     private Connection connect() throws SQLException {
         return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
     }
 
+    /**
+     * 必要な3テーブル(recipes / recipe_categories / recipe_ingredients)を冪等に作成する。
+     */
     private void ensureSchema() {
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
             stmt.execute("PRAGMA foreign_keys = ON");
@@ -96,7 +110,8 @@ public class RecipeRepository {
     }
 
     /**
-     * 全レシピを読み込む。カテゴリーと食材は別テーブルから結合して復元する
+     * 全レシピを読み込む。カテゴリーと食材は別テーブルから結合して復元する。
+     * @return 全レシピのリスト(順序は recipes テーブルの id 昇順)
      */
     public List<Recipe> findAll() {
         Map<Long, RecipeBuilder> builders = new LinkedHashMap<>();
@@ -147,7 +162,10 @@ public class RecipeRepository {
     }
 
     /**
-     * レシピを新規挿入し、生成された id を返す
+     * レシピを新規挿入し、生成された id を返す。
+     * カテゴリー・食材は1トランザクション内で関連テーブルにも挿入する。
+     * @param recipe 保存するレシピ(id は無視される)
+     * @return 自動採番された id
      */
     public long insert(Recipe recipe) {
         try (Connection conn = connect()) {
@@ -193,7 +211,9 @@ public class RecipeRepository {
 
     /**
      * 既存レシピを更新する。タイトル/URLは UPDATE、関連テーブル(カテゴリー・食材)は
-     * 全削除してから再挿入することで内容差分を反映する。1トランザクションで原子的に行う
+     * 全削除してから再挿入することで内容差分を反映する。1トランザクションで原子的に行う。
+     * @param recipe 同じ id を持つ更新後のレシピ
+     * @throws IllegalArgumentException recipe.getId() が 0 以下のとき
      */
     public void update(Recipe recipe) {
         long id = recipe.getId();
@@ -247,7 +267,8 @@ public class RecipeRepository {
 
     /**
      * 指定 id のレシピを削除する。関連テーブルは ON DELETE CASCADE が設定されているが、
-     * SQLite の foreign_keys プラグマがコネクション毎にONにされるため明示的に消す
+     * SQLite の foreign_keys プラグマがコネクション毎にONにされるため明示的に消す。
+     * @param id 削除対象レシピのDB主キー
      */
     public void delete(long id) {
         try (Connection conn = connect()) {
@@ -271,8 +292,10 @@ public class RecipeRepository {
     }
 
     /**
-     * 食材名から main.java.main.java.Recipe.Recipe.IngredientMaster を引いて main.java.main.java.Recipe.Recipe.Ingredient を返す。
-     * マスタに存在しない場合は category を OTHER にした暫定オブジェクトを返す
+     * 食材名から {@link IngredientMaster} を引いて {@link Ingredient} を返す。
+     * マスタに存在しない場合は category を OTHER にした暫定オブジェクトを返す。
+     * @param name 食材名
+     * @return 解決された Ingredient (マスタに無ければカテゴリ OTHER の暫定値)
      */
     private Ingredient lookupIngredient(String name) {
         for (Ingredient ing : ingredientMaster.getAllIngredients()) {
@@ -289,6 +312,11 @@ public class RecipeRepository {
         final ArrayList<Ingredient> ingredients = new ArrayList<>();
         final EnumSet<RecipeCategory> categories = EnumSet.noneOf(RecipeCategory.class);
 
+        /**
+         * @param id    DB主キー
+         * @param title レシピ名
+         * @param url   参照URL
+         */
         RecipeBuilder(long id, String title, String url) {
             this.id = id;
             this.title = title;

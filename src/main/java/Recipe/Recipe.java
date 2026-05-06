@@ -17,6 +17,13 @@ public class Recipe {
     private ArrayList<Ingredient> ingredients;
     private EnumSet<RecipeCategory> categories;
 
+    /**
+     * 新規レシピを生成する。
+     * @param title       レシピ名(必須)
+     * @param url         参照URL(必須)
+     * @param ingredients 使用食材のリスト
+     * @param categories  レシピカテゴリーの集合(空またはnullなら OTHER のみ)
+     */
     public Recipe(String title, String url, ArrayList<Ingredient> ingredients, EnumSet<RecipeCategory> categories) {
         this.title = title;
         this.url = url;
@@ -26,18 +33,49 @@ public class Recipe {
                 : EnumSet.copyOf(categories);
     }
 
-    /** カテゴリー未指定時のフォールバックを許容する旧形式コンストラクタ */
+    /**
+     * カテゴリー未指定時のフォールバックを許容する旧形式コンストラクタ。
+     * 内部でカテゴリーを {@link RecipeCategory#OTHER} に固定する。
+     * @param title       レシピ名
+     * @param url         参照URL
+     * @param ingredients 使用食材のリスト
+     */
     public Recipe(String title, String url, ArrayList<Ingredient> ingredients) {
         this(title, url, ingredients, EnumSet.of(RecipeCategory.OTHER));
     }
 
+    /**
+     * DB主キーを返す。
+     * @return DB上のID。未永続化レシピでは 0
+     */
     public long getId() { return id; }
+
+    /**
+     * 永続化後にDBが採番したIDを設定する。
+     * @param id 採番されたID
+     */
     public void setId(long id) { this.id = id; }
 
+    /**
+     * @return レシピ名
+     */
     public String getTitle() { return title; }
+
+    /**
+     * @return 参照URL
+     */
     public String getUrl() { return url; }
+
+    /**
+     * @return 使用食材のリスト(内部参照そのまま)
+     */
     public ArrayList<Ingredient> getIngredients() { return ingredients; }
 
+    /**
+     * categories が null/空の場合は {@link RecipeCategory#OTHER} のみのSetを返す。
+     * 返り値は防御的コピーなので、変更しても本オブジェクトには影響しない。
+     * @return レシピカテゴリー集合のコピー
+     */
     public EnumSet<RecipeCategory> getCategories() {
         if (categories == null || categories.isEmpty()) return EnumSet.of(RecipeCategory.OTHER);
         return EnumSet.copyOf(categories);

@@ -13,6 +13,11 @@ import java.util.ArrayList;
  */
 public class IngredientMaster {
     private LinkedHashMap<Ingredient, String> database;
+
+    /**
+     * インスタンス生成と同時に database.csv を読み込む。
+     * CSV が見つからない場合は database が空のまま生成される。
+     */
     public IngredientMaster() {
         database = new LinkedHashMap<>();
         loadCsv();
@@ -51,6 +56,7 @@ public class IngredientMaster {
      * 1. 実行カレント (相対パス候補)
      * 2. 自身がロードされた JAR/クラスディレクトリと同階層
      * 3. その親ディレクトリ
+     * @return 見つかった CSV ファイル。どこにも無ければ null
      */
     private File locateCsv() {
         String[] cwdCandidates = {
@@ -81,6 +87,11 @@ public class IngredientMaster {
         return null;
     }
 
+    /**
+     * 指定カテゴリーに属する食材を CSV 順で返す。
+     * @param category 絞り込みたい食材カテゴリー
+     * @return 該当食材のリスト(マッチが無い場合は空のリスト)
+     */
     public ArrayList<Ingredient> searchIngredient(IngredientCategory category) {
         ArrayList<Ingredient> list = new ArrayList<>();
         for (Ingredient ing : database.keySet()) {
@@ -89,6 +100,10 @@ public class IngredientMaster {
         return list;
     }
 
+    /**
+     * 全食材を CSV に記述された順序で返す。
+     * @return 全食材のリスト
+     */
     public ArrayList<Ingredient> getAllIngredients() {
         return new ArrayList<>(database.keySet());
     }

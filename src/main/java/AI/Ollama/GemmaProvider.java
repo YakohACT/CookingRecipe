@@ -5,6 +5,10 @@ package main.java.AI.Ollama;
  */
 public class GemmaProvider extends OllamaProvider {
 
+    /**
+     * Gemma 系で利用可能なモデルタグの一覧を返す。
+     * @return Gemma 系モデル名の配列
+     */
     @Override
     public String[] getAvailableModels() {
         return new String[]{

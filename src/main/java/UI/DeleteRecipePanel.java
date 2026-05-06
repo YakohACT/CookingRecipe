@@ -12,6 +12,10 @@ import java.awt.*;
  */
 public class DeleteRecipePanel extends JPanel {
 
+    /**
+     * 削除パネルを構築する。
+     * @param owner 共有状態(レシピリスト等)へアクセスするためのフレーム参照
+     */
     public DeleteRecipePanel(SwingMain owner) {
         setLayout(new BorderLayout(10, 10));
         setBorder(new EmptyBorder(30, 50, 30, 50));

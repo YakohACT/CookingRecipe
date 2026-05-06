@@ -57,6 +57,12 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
         return parseJsonResponse(jsonRes.substring(start, end));
     }
 
+    /**
+     * InputStream を UTF-8 文字列として読み切る。
+     * @param stream 入力ストリーム(null可)
+     * @return ストリーム内容の文字列(null入力時は空文字)
+     * @throws IOException 読み込み失敗時
+     */
     private String readStream(InputStream stream) throws IOException {
         if (stream == null) return "";
         StringBuilder sb = new StringBuilder();

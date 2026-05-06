@@ -24,14 +24,24 @@ public enum RecipeCategory {
 
     private final String displayName;
 
+    /**
+     * @param displayName UI表示用の日本語ラベル
+     */
     RecipeCategory(String displayName) {
         this.displayName = displayName;
     }
 
+    /**
+     * @return UI表示用の日本語ラベル
+     */
     public String getDisplayName() {
         return displayName;
     }
 
+    /**
+     * コンボボックス等で日本語表示するため displayName を返す。
+     * @return UI表示用の日本語ラベル
+     */
     @Override
     public String toString() {
         return displayName;

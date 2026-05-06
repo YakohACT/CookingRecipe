@@ -21,7 +21,10 @@ public class ViewRecipePanel extends JPanel {
 
     /**
      * 詳細表示エリア + 「編集」ボタンを縦に並べたパネルを生成する。
-     * source の選択が無いときは編集ボタンが無効化される
+     * source の選択が無いときは編集ボタンが無効化される。
+     * @param detail 表示する詳細エリア
+     * @param source 選択状態を監視する対象リスト
+     * @return 詳細エリアと編集ボタンをまとめたパネル
      */
     private JPanel detailWithEditButton(JEditorPane detail, JList<Recipe> source) {
         JPanel container = new JPanel(new BorderLayout(0, 8));
@@ -43,6 +46,10 @@ public class ViewRecipePanel extends JPanel {
         return container;
     }
 
+    /**
+     * 閲覧パネルを構築する。
+     * @param owner 共有状態(レシピリスト等)にアクセスするためのフレーム参照
+     */
     public ViewRecipePanel(SwingMain owner) {
         this.owner = owner;
         setLayout(new BorderLayout());
@@ -56,6 +63,10 @@ public class ViewRecipePanel extends JPanel {
         add(tabs, BorderLayout.CENTER);
     }
 
+    /**
+     * タイトル一覧から選択する1つ目のタブを構築する。
+     * @return タブコンテンツのパネル
+     */
     private JPanel buildTitleTab() {
         JPanel titleTab = new JPanel(new BorderLayout(20, 20));
         titleTab.setBorder(new EmptyBorder(20, 20, 20, 20));
@@ -76,6 +87,10 @@ public class ViewRecipePanel extends JPanel {
         return titleTab;
     }
 
+    /**
+     * 食材を AND 条件で絞り込む2つ目のタブを構築する。
+     * @return タブコンテンツのパネル
+     */
     private JPanel buildIngredientTab() {
         JPanel ingTab = new JPanel(new BorderLayout(20, 20));
         ingTab.setBorder(new EmptyBorder(20, 20, 20, 20));
@@ -150,7 +165,8 @@ public class ViewRecipePanel extends JPanel {
     }
 
     /**
-     * カテゴリー選択でレシピを絞り込む3つ目のタブ
+     * カテゴリー選択でレシピを絞り込む3つ目のタブを構築する。
+     * @return タブコンテンツのパネル
      */
     private JPanel buildCategoryTab() {
         JPanel tab = new JPanel(new BorderLayout(20, 20));

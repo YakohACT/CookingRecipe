@@ -5,6 +5,10 @@ package main.java.AI.Ollama;
  */
 public class QwenProvider extends OllamaProvider {
 
+    /**
+     * Qwen / qwen-vl 系で利用可能なモデルタグの一覧を返す。
+     * @return Qwen 系モデル名の配列
+     */
     @Override
     public String[] getAvailableModels() {
         return new String[]{

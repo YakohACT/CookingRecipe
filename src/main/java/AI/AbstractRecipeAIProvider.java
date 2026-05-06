@@ -11,13 +11,29 @@ import java.util.stream.Collectors;
  */
 public abstract class AbstractRecipeAIProvider {
 
+    /**
+     * 各プロバイダー固有のAPIを呼び出してレシピ案を取得する。
+     * @param apiKey         APIキー(Ollamaは未使用)
+     * @param modelName      モデル名(例: gpt-4.1, gemini-2.5-flash, llama3:8b 等)
+     * @param url            レシピ参照URL(YouTube/Webページ)
+     * @param allIngredients 利用可能な食材リスト
+     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @throws Exception API呼び出し/パース失敗時
+     */
     public abstract String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception;
 
+    /**
+     * このプロバイダーで選択可能なモデル名の配列を返す。
+     * @return モデル名配列
+     */
     public abstract String[] getAvailableModels();
 
     /**
      * 食材候補からレシピを提案させるプロンプトを構築する。
      * 候補リストを先頭に置き、JSON形式での回答を強制する。
+     * @param url            参照URL(空文字許容)
+     * @param allIngredients 利用可能な食材リスト
+     * @return AIへ送信するプロンプト文字列
      */
     protected String buildPrompt(String url, ArrayList<Ingredient> allIngredients) {
         String names = allIngredients.stream()
@@ -66,7 +82,9 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * APIレスポンスから抽出した text/content フィールドの中身(まだJSONエスケープ済み)を
-     * 解読し、{title, ingredients(カンマ連結)} の形に変換する
+     * 解読し、{title, ingredients(カンマ連結)} の形に変換する。
+     * @param escapedJsonText API応答内のJSON文字列(エスケープ済み)
+     * @return [タイトル, "食材1,食材2,…"] の2要素配列
      */
     protected String[] parseJsonResponse(String escapedJsonText) {
         String text = jsonUnescape(escapedJsonText);
@@ -84,7 +102,13 @@ public abstract class AbstractRecipeAIProvider {
         return new String[]{stripBrackets(title), joined.toString()};
     }
 
-    /** "key":"value" 形式の文字列値を抽出する */
+    /**
+     * "key":"value" 形式の文字列値を抽出する。
+     * @param text     検索対象のJSON文字列(unescape済み)
+     * @param key      探したいキー名
+     * @param fallback 見つからない場合のデフォルト値
+     * @return 抽出した文字列値、または fallback
+     */
     private String extractJsonString(String text, String key, String fallback) {
         int keyIdx = text.indexOf("\"" + key + "\"");
         if (keyIdx == -1) return fallback;
@@ -98,7 +122,12 @@ public abstract class AbstractRecipeAIProvider {
         return text.substring(valStart, valEnd);
     }
 
-    /** "key":["v1","v2",...] 形式の文字列配列を抽出する */
+    /**
+     * "key":["v1","v2",...] 形式の文字列配列を抽出する。
+     * @param text 検索対象のJSON文字列(unescape済み)
+     * @param key  探したいキー名
+     * @return 抽出した文字列配列(見つからなければ空配列)
+     */
     private String[] extractJsonStringArray(String text, String key) {
         int keyIdx = text.indexOf("\"" + key + "\"");
         if (keyIdx == -1) return new String[0];
@@ -120,7 +149,12 @@ public abstract class AbstractRecipeAIProvider {
         return items.toArray(new String[0]);
     }
 
-    /** pos以降でエスケープされていない最初の '"' の位置を返す。見つからなければ -1 */
+    /**
+     * 文字列 s の指定位置以降でエスケープされていない最初の '"' を探す。
+     * @param s   走査対象の文字列
+     * @param pos 走査開始位置(この位置から探す)
+     * @return 見つかった '"' のインデックス。見つからなければ -1
+     */
     protected static int findUnescapedQuote(String s, int pos) {
         while (pos < s.length()) {
             char c = s.charAt(pos);
@@ -134,7 +168,11 @@ public abstract class AbstractRecipeAIProvider {
         return -1;
     }
 
-    /** Java文字列をJSON文字列値として埋め込めるようエスケープする */
+    /**
+     * Java文字列をJSON文字列値として埋め込めるようエスケープする。
+     * @param s 元の文字列
+     * @return JSON文字列値として安全な形にエスケープした文字列
+     */
     protected static String jsonEscape(String s) {
         StringBuilder sb = new StringBuilder(s.length() + 16);
         for (int i = 0; i < s.length(); i++) {
@@ -158,7 +196,11 @@ public abstract class AbstractRecipeAIProvider {
         return sb.toString();
     }
 
-    /** JSON文字列値内のエスケープを解除する */
+    /**
+     * JSON文字列値内のエスケープを解除する({@code \"} → {@code "} など)。
+     * @param s エスケープされたJSON文字列値
+     * @return 実体を復元した文字列
+     */
     protected static String jsonUnescape(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
@@ -197,7 +239,9 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * AIがプレースホルダや装飾を含めた場合のために角括弧・カギカッコ・先頭の箇条書き記号などを除去する
+     * AIがプレースホルダや装飾を含めた場合のために角括弧・カギカッコ・先頭の箇条書き記号などを除去する。
+     * @param s 元の文字列
+     * @return 装飾を除去した文字列
      */
     protected String stripBrackets(String s) {
         return s.replaceAll("[\\[\\]【】「」]", "")

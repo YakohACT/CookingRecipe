@@ -14,6 +14,10 @@ import java.awt.*;
  */
 public class SettingsPanel extends JPanel {
 
+    /**
+     * AI設定パネルを構築する。プロバイダー切替で該当プロバイダーの保存済みモデル/キーを復元。
+     * @param owner 共有状態(プロバイダー、モデル、APIキー等)を保持するフレーム
+     */
     public SettingsPanel(SwingMain owner) {
         setLayout(new BorderLayout());
 
@@ -43,6 +47,7 @@ public class SettingsPanel extends JPanel {
         UIComponents.addLeftAligned(form, new JLabel("APIキー (プロバイダーごとに別々に保存されます):"));
         JPasswordField keyField = new JPasswordField();
         keyField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        UIComponents.attachContextMenu(keyField);
         UIComponents.addLeftAligned(form, keyField);
 
         // プロバイダー切替時に、そのプロバイダーで保存済みのモデル/APIキーを再読み込み
@@ -75,7 +80,11 @@ public class SettingsPanel extends JPanel {
         add(new JScrollPane(form), BorderLayout.CENTER);
     }
 
-    /** 指定プロバイダーが対応するモデル一覧をモデル用コンボボックスに反映する */
+    /**
+     * 指定プロバイダーが対応するモデル一覧をモデル用コンボボックスに反映する。
+     * @param provider   対象のAIプロバイダー(null可)
+     * @param modelCombo 反映先のコンボボックス
+     */
     private void updateModelCombo(RecipeAIService.Provider provider, JComboBox<String> modelCombo) {
         modelCombo.removeAllItems();
         if (provider == null) return;

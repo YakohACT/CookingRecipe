@@ -29,15 +29,26 @@ public class SecureKeyStore {
     private final SecretKey masterKey;
     private final SecureRandom random = new SecureRandom();
 
+    /**
+     * マスタ鍵をロードする(または初回時に新規生成する)。
+     */
     public SecureKeyStore() {
         this.masterKey = loadOrCreateMasterKey();
     }
 
+    /**
+     * マスタ鍵ファイルのパスを返す。
+     * @return ~/.recipemanager/master.key の Path
+     */
     private static Path keyFilePath() {
         String home = System.getProperty("user.home");
         return Paths.get(home, ".recipemanager", "master.key");
     }
 
+    /**
+     * マスタ鍵ファイルが存在すれば読み込み、無ければ32バイト乱数で新規生成して保存する。
+     * @return AES-256 マスタ鍵
+     */
     private SecretKey loadOrCreateMasterKey() {
         Path keyFile = keyFilePath();
         try {
@@ -62,7 +73,8 @@ public class SecureKeyStore {
 
     /**
      * 鍵ファイルを本人のみ読み書き可に制限する。
-     * Linux/Mac: POSIX 0600。Windows: setReadable/setWritable のベストエフォート
+     * Linux/Mac: POSIX 0600。Windows: setReadable/setWritable のベストエフォート。
+     * @param p パーミッションを設定するファイル
      */
     private static void tryRestrictPermissions(Path p) {
         try {
@@ -79,7 +91,9 @@ public class SecureKeyStore {
     }
 
     /**
-     * 平文をAES-GCMで暗号化し、(IV ‖ ciphertext) をBase64で返す
+     * 平文をAES-GCMで暗号化し、(IV ‖ ciphertext) をBase64で返す。
+     * @param plain 暗号化したい平文(null は空文字扱い)
+     * @return Base64 エンコード済みの暗号文(IV12byte + 認証タグ16byte 含む)
      */
     public String encrypt(String plain) {
         if (plain == null) plain = "";
@@ -100,7 +114,9 @@ public class SecureKeyStore {
 
     /**
      * (IV ‖ ciphertext) をBase64でデコード→ AES-GCM 復号。
-     * 失敗時(マスタ鍵不一致や改ざん検出時)は空文字を返す
+     * 失敗時(マスタ鍵不一致や改ざん検出時)は空文字を返す。
+     * @param ciphertextB64 encrypt で生成された Base64 文字列
+     * @return 復号された平文(失敗時は空文字)
      */
     public String decrypt(String ciphertextB64) {
         if (ciphertextB64 == null || ciphertextB64.isEmpty()) return "";

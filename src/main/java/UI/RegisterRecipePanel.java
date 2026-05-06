@@ -26,10 +26,20 @@ public class RegisterRecipePanel extends JPanel {
     private final JList<RecipeCategory> categoryList = new JList<>(RecipeCategory.values());
     private final DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
 
+    /**
+     * 新規登録モードで構築する。
+     * @param owner 共有状態にアクセスするためのフレーム参照
+     */
     public RegisterRecipePanel(SwingMain owner) {
         this(owner, null);
     }
 
+    /**
+     * 編集モード(または editTarget=null で新規登録モード)で構築する。
+     * editTarget が非nullなら、フォームに既存値が prefill され保存ボタンが「更新」になる。
+     * @param owner      共有状態にアクセスするためのフレーム参照
+     * @param editTarget 編集対象レシピ。null なら新規登録モード
+     */
     public RegisterRecipePanel(SwingMain owner, Recipe editTarget) {
         this.owner = owner;
         this.editTarget = editTarget;
@@ -128,7 +138,10 @@ public class RegisterRecipePanel extends JPanel {
         add(new JScrollPane(form), BorderLayout.CENTER);
     }
 
-    /** 編集対象レシピでフォーム要素を初期化する */
+    /**
+     * 編集対象レシピの内容をフォーム要素に流し込む。
+     * @param r 編集対象のレシピ
+     */
     private void prefillFromRecipe(Recipe r) {
         titleField.setText(r.getTitle());
         urlField.setText(r.getUrl());
@@ -146,6 +159,11 @@ public class RegisterRecipePanel extends JPanel {
         categoryList.setSelectedIndices(indices);
     }
 
+    /**
+     * フォームヘッダー(タイトル文字列 + AIボタン)を構築する。
+     * @param btnAi AI自動提案ボタン
+     * @return ヘッダーパネル
+     */
     private JPanel buildHeader(JButton btnAi) {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setOpaque(false);
@@ -158,6 +176,10 @@ public class RegisterRecipePanel extends JPanel {
         return headerPanel;
     }
 
+    /**
+     * AI自動提案ボタンの見た目を構築する。
+     * @return スタイル適用済みの JButton
+     */
     private JButton buildAiButton() {
         JButton btnAi = new JButton("✨ AI自動提案");
         btnAi.setBackground(Theme.COLOR_AI);
@@ -168,6 +190,10 @@ public class RegisterRecipePanel extends JPanel {
         return btnAi;
     }
 
+    /**
+     * AI自動提案を非同期で要求し、成功時はフォームに反映する。
+     * @param btnAi 押下されたAIボタン(処理中は無効化される)
+     */
     private void requestAiSuggestion(JButton btnAi) {
         // Ollama はローカルLLMなのでAPIキー不要。それ以外はAPIキー必須
         if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
@@ -210,7 +236,9 @@ public class RegisterRecipePanel extends JPanel {
     /**
      * AIの返したレシピをフォームに反映する。
      * タイトルが空、または食材マスタとマッチする食材が0個の場合は
-     * 「検出できなかった」と判断し、フォームには一切手を加えず false を返す
+     * 「検出できなかった」と判断し、フォームには一切手を加えず false を返す。
+     * @param result AIから返ってきた {タイトル, "食材1,食材2,…"} 配列
+     * @return 反映に成功すれば true、検出失敗時は false
      */
     private boolean applyAiResult(String[] result) {
         String aiTitle = (result == null || result.length < 1 || result[0] == null) ? "" : result[0].trim();
@@ -239,6 +267,10 @@ public class RegisterRecipePanel extends JPanel {
         return true;
     }
 
+    /**
+     * 入力内容を検証し、新規登録または更新を行う。
+     * 終了後はウェルカム画面に戻る。
+     */
     private void submitRecipe() {
         String title = titleField.getText().trim();
         String url = urlField.getText().trim();

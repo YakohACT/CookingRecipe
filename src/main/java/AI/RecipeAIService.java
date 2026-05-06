@@ -16,12 +16,26 @@ public class RecipeAIService {
     private String apiKey = "";
     private String modelName = "";
 
+    /**
+     * 利用するプロバイダー・APIキー・モデル名を一括設定する。
+     * @param provider  AIプロバイダー
+     * @param apiKey    APIキー(Ollamaは空文字でよい)
+     * @param modelName 利用モデル名
+     */
     public void setConfig(Provider provider, String apiKey, String modelName) {
         this.selectedProvider = provider;
         this.apiKey = apiKey;
         this.modelName = modelName;
     }
 
+    /**
+     * 設定済みプロバイダーへレシピ提案を依頼する。
+     * Ollama 以外で APIキー未設定の場合は例外を投げる。
+     * @param url            参照URL
+     * @param allIngredients 利用可能な食材リスト
+     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @throws Exception API呼び出し失敗時 / APIキー未設定時
+     */
     public String[] suggestRecipe(String url, ArrayList<Ingredient> allIngredients) throws Exception {
         // OllamaはローカルLLMなのでAPIキー不要
         if (selectedProvider != Provider.OLLAMA && (apiKey == null || apiKey.isEmpty())) {
@@ -52,7 +66,10 @@ public class RecipeAIService {
     }
 
     /**
-     * プロバイダー(と Ollama の場合は modelName)から具象クラスを生成する
+     * プロバイダー(と Ollama の場合は modelName)から具象クラスを生成する。
+     * @param provider  AIプロバイダー
+     * @param modelName Ollama の場合のサブクラス振り分けに使うモデル名
+     * @return 対応する具象 AbstractRecipeAIProvider
      */
     private static AbstractRecipeAIProvider createProvider(Provider provider, String modelName) {
         switch (provider) {
@@ -65,7 +82,9 @@ public class RecipeAIService {
 
     /**
      * モデル名のプレフィックスで Ollama サブクラスを振り分ける。
-     * 不明なモデル名は main.java.AI.Ollama.LlamaProvider をフォールバックとして利用(API挙動は同じ)
+     * 不明なモデル名は {@link LlamaProvider} をフォールバックとして利用(API挙動は同じ)。
+     * @param modelName Ollamaモデル名(例: "gemma4:e2b")
+     * @return 対応する OllamaProvider サブクラスのインスタンス
      */
     private static OllamaProvider ollamaProviderForModel(String modelName) {
         String lower = (modelName == null) ? "" : modelName.toLowerCase();
@@ -76,7 +95,10 @@ public class RecipeAIService {
         return new LlamaProvider();
     }
 
-    /** Ollama 系サブクラスの一覧(モデル列挙用) */
+    /**
+     * Ollama 系サブクラスの一覧(モデル列挙用)。
+     * @return 全サブクラスインスタンスの配列
+     */
     private static OllamaProvider[] ollamaSubclasses() {
         return new OllamaProvider[]{
                 new LlamaProvider(),

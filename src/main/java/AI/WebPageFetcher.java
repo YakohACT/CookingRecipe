@@ -26,6 +26,8 @@ public final class WebPageFetcher {
     /**
      * URLのHTMLを取得し、タグ除去後のプレーンテキストを返す。
      * 失敗時は空文字を返し呼び出し側のフローを止めない。
+     * @param url 取得対象のURL
+     * @return プレーンテキスト化したページ内容(最大3000文字、失敗時は空文字)
      */
     public static String fetchSummary(String url) {
         if (url == null || url.trim().isEmpty()) return "";
@@ -68,6 +70,13 @@ public final class WebPageFetcher {
         }
     }
 
+    /**
+     * InputStream を最大バイト数まで読み込む。
+     * @param is       入力ストリーム
+     * @param maxBytes 読み込み上限バイト数
+     * @return 読み込まれたバイト列
+     * @throws Exception 読み込み失敗時
+     */
     private static byte[] readBytes(InputStream is, int maxBytes) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
@@ -82,6 +91,12 @@ public final class WebPageFetcher {
         return out.toByteArray();
     }
 
+    /**
+     * Content-Type ヘッダ → HTML の meta タグ → UTF-8 の優先度で文字コードを判定する。
+     * @param contentType レスポンスの Content-Type ヘッダ(null可)
+     * @param htmlSnippet HTML 本文(null可、meta charset 検出に使う)
+     * @return 判定された Charset (失敗時は UTF-8)
+     */
     private static Charset detectCharset(String contentType, String htmlSnippet) {
         Pattern charsetPattern = Pattern.compile("charset\\s*=\\s*[\"']?([A-Za-z0-9_\\-]+)", Pattern.CASE_INSENSITIVE);
         if (contentType != null) {
@@ -102,7 +117,9 @@ public final class WebPageFetcher {
 
     /**
      * 簡易HTMLパーサ。script/style/コメント除去 → ブロック要素を改行化 → 残タグ除去
-     * → HTMLエンティティ簡易デコード → 空白整形。タイトルを冒頭に配置する
+     * → HTMLエンティティ簡易デコード → 空白整形。タイトルを冒頭に配置する。
+     * @param html 元のHTML文字列
+     * @return プレーンテキスト化された本文
      */
     private static String htmlToText(String html) {
         String title = "";

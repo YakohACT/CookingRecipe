@@ -34,7 +34,9 @@ public final class YoutubeMetadataFetcher {
 
     /**
      * 動画タイトルと字幕をひとつのテキストブロックにまとめて返す。
-     * 失敗時/取得不能時は空文字
+     * 失敗時/取得不能時は空文字。
+     * @param url YouTubeの任意形式URL
+     * @return 「【動画タイトル】… 【動画字幕(抜粋)】…」形式のテキスト(空文字あり)
      */
     public static String fetchSummary(String url) {
         String videoId = extractVideoId(url);
@@ -55,6 +57,11 @@ public final class YoutubeMetadataFetcher {
         return out.toString().trim();
     }
 
+    /**
+     * YouTubeのURLから動画IDを抽出する。
+     * @param url 解析対象のURL
+     * @return 動画ID。抽出できなければ null
+     */
     private static String extractVideoId(String url) {
         if (url == null) return null;
         Matcher m;
@@ -69,7 +76,11 @@ public final class YoutubeMetadataFetcher {
         return null;
     }
 
-    /** oEmbed で動画タイトルを取得 */
+    /**
+     * oEmbed APIで動画タイトルを取得する。
+     * @param videoUrl YouTube動画のURL
+     * @return 動画タイトル(失敗時は空文字)
+     */
     private static String fetchTitle(String videoUrl) {
         try {
             String oembedUrl = "https://www.youtube.com/oembed?format=json&url="
@@ -90,7 +101,9 @@ public final class YoutubeMetadataFetcher {
 
     /**
      * watch ページに埋まっている ytInitialPlayerResponse から captionTracks を取り出し、
-     * 適切な言語の baseUrl を叩いて timedtext XML を取得し、テキスト化する
+     * 適切な言語の baseUrl を叩いて timedtext XML を取得し、テキスト化する。
+     * @param videoId 動画ID
+     * @return 字幕テキスト(失敗時/字幕なしの場合は空文字)
      */
     private static String fetchTranscript(String videoId) {
         try {
@@ -131,7 +144,11 @@ public final class YoutubeMetadataFetcher {
         }
     }
 
-    /** timedtext の <text>...</text> を改行区切りで連結 */
+    /**
+     * timedtext の {@code <text>...</text>} を改行区切りで連結してプレーンテキスト化する。
+     * @param xml timedtext XML
+     * @return 連結された字幕テキスト(空入力時は空文字)
+     */
     private static String parseTranscriptXml(String xml) {
         if (xml == null || xml.isEmpty()) return "";
         StringBuilder sb = new StringBuilder();
@@ -154,6 +171,13 @@ public final class YoutubeMetadataFetcher {
         return sb.toString();
     }
 
+    /**
+     * 指定 URL に GET リクエストを送り、レスポンスボディを UTF-8 で読み込む。
+     * @param url    取得対象のURL
+     * @param accept Accept ヘッダ値
+     * @return レスポンスボディ文字列(2xx以外は空文字)
+     * @throws Exception 通信失敗時
+     */
     private static String httpGet(String url, String accept) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setRequestMethod("GET");
@@ -174,6 +198,12 @@ public final class YoutubeMetadataFetcher {
         }
     }
 
+    /**
+     * pos 以降でエスケープされていない最初の '"' を探す。
+     * @param s   検索対象
+     * @param pos 開始位置
+     * @return マッチ位置。見つからなければ -1
+     */
     private static int findUnescapedQuote(String s, int pos) {
         while (pos < s.length()) {
             char c = s.charAt(pos);
@@ -184,7 +214,11 @@ public final class YoutubeMetadataFetcher {
         return -1;
     }
 
-    /** バックスラッシュ系のJSONエスケープ(quote, slash, n, t, ユニコード4桁等)を実体に戻す */
+    /**
+     * バックスラッシュ系のJSONエスケープ(quote, slash, n, t, ユニコード4桁等)を実体に戻す。
+     * @param s エスケープされたJSON文字列値
+     * @return 復元された文字列
+     */
     private static String jsonUnescape(String s) {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {

@@ -15,13 +15,20 @@ public class ApiKeyStore {
     private final SecureKeyStore secure;
     private final Preferences prefs;
 
+    /**
+     * 暗号化エンジンと永続化先 Preferences をDIする。
+     * @param secure 暗号化/復号を担う SecureKeyStore
+     * @param prefs  保存先 Preferences ノード
+     */
     public ApiKeyStore(SecureKeyStore secure, Preferences prefs) {
         this.secure = secure;
         this.prefs = prefs;
     }
 
     /**
-     * 指定プロバイダーのAPIキーを取得する。未設定や復号失敗時は空文字を返す
+     * 指定プロバイダーのAPIキーを取得する。未設定や復号失敗時は空文字を返す。
+     * @param provider 取得したいプロバイダー
+     * @return 復号済みのAPIキー(未設定/失敗時は空文字)
      */
     public String getKey(RecipeAIService.Provider provider) {
         if (provider == null) return "";
@@ -31,7 +38,9 @@ public class ApiKeyStore {
     }
 
     /**
-     * APIキーを暗号化して保存する。空文字を渡すとエントリを削除する
+     * APIキーを暗号化して保存する。空文字を渡すとエントリを削除する。
+     * @param provider 保存対象プロバイダー
+     * @param plainKey 平文のAPIキー(空文字なら削除動作)
      */
     public void setKey(RecipeAIService.Provider provider, String plainKey) {
         if (provider == null) return;

@@ -21,12 +21,28 @@ public class Ingredient implements Serializable {
         this.category = category;
     }
 
+    /**
+     * @return 食材名
+     */
     public String getName() { return name; }
+
+    /**
+     * @return 食材カテゴリー
+     */
     public IngredientCategory getCategory() { return category; }
 
+    /**
+     * リスト表示時にラベル文字列として食材名をそのまま返す。
+     * @return 食材名
+     */
     @Override
     public String toString() { return name; }
 
+    /**
+     * 名前のみで等価判定する(カテゴリーが違っても同じ名前なら同一とみなす)。
+     * @param o 比較対象オブジェクト
+     * @return 名前が一致すれば true
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -35,6 +51,10 @@ public class Ingredient implements Serializable {
         return Objects.equals(name, that.name);
     }
 
+    /**
+     * 名前のみのハッシュコード(equals と整合)。
+     * @return 食材名のハッシュ
+     */
     @Override
     public int hashCode() { return Objects.hash(name); }
 }

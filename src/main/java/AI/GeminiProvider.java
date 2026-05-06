@@ -72,7 +72,11 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     }
 
     /**
-     * 503 (一時的サーバー過負荷) の場合は指数バックオフでリトライする
+     * 503 (一時的サーバー過負荷) の場合は指数バックオフでリトライする。
+     * @param urlStr 送信先URL
+     * @param json   POSTするJSONボディ
+     * @return レスポンスボディ文字列
+     * @throws Exception 通信失敗・リトライ上限到達時
      */
     private String postWithRetry(String urlStr, String json) throws Exception {
         int maxRetries = 3;
@@ -104,7 +108,9 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     /**
      * YouTube URL から動画IDだけ抜き出して canonical な watch?v=... に変換する。
      * playlist や index などの余計なクエリ、Shorts/embed/youtu.be 形式に対応。
-     * 解析できない場合は原文をそのまま返す
+     * 解析できない場合は原文をそのまま返す。
+     * @param url 任意のYouTubeリンク
+     * @return canonical な watch?v=... 形式 (失敗時は原文)
      */
     static String canonicalYoutubeUrl(String url) {
         String videoId = extractYoutubeVideoId(url);
@@ -112,6 +118,11 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         return "https://www.youtube.com/watch?v=" + videoId;
     }
 
+    /**
+     * YouTubeのURLから動画ID(11文字以上の英数記号)を抽出する。
+     * @param url 解析対象のURL
+     * @return 動画ID。抽出できなかった場合は null
+     */
     private static String extractYoutubeVideoId(String url) {
         // youtu.be/<id>
         java.util.regex.Matcher m = java.util.regex.Pattern.compile(
@@ -132,6 +143,12 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         return null;
     }
 
+    /**
+     * InputStream を UTF-8 文字列として読み切る。
+     * @param stream 入力ストリーム(null可)
+     * @return ストリーム内容の文字列(null入力時は空文字)
+     * @throws Exception 読み込み失敗時
+     */
     private String readStream(InputStream stream) throws Exception {
         if (stream == null) return "";
         StringBuilder sb = new StringBuilder();

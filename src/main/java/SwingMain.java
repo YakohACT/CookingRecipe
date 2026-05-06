@@ -51,6 +51,11 @@ public class SwingMain extends JFrame {
     private boolean darkMode;
     private JButton themeButton;
 
+    /**
+     * メインフレームを構築する。
+     * 食材マスタ・レシピDB・APIキーストアを順に初期化し、
+     * Preferences から前回のプロバイダー/テーマを復元してウェルカム画面を表示する。
+     */
     public SwingMain() {
         // IngredientMaster を先に初期化し、AllRecipeList(SQLite読込)の食材名解決に渡す
         ingredientMaster = new IngredientMaster();
@@ -86,6 +91,10 @@ public class SwingMain extends JFrame {
         showWelcome();
     }
 
+    /**
+     * サイドメニュー(MENU + 各操作ボタン + テーマ切替 + 保存して終了)を構築する。
+     * @return サイドメニューパネル
+     */
     private JPanel buildSideMenu() {
         JPanel sideMenu = new JPanel();
         sideMenu.setLayout(new BoxLayout(sideMenu, BoxLayout.Y_AXIS));
@@ -122,12 +131,24 @@ public class SwingMain extends JFrame {
         return sideMenu;
     }
 
+    /**
+     * サイドメニューに高さ固定のボタンを追加し、下にスペーサを置く。
+     * @param parent 追加先のサイドメニューパネル
+     * @param text   ボタンに表示する文字列
+     * @param action クリック時の動作
+     */
     private void addSideButton(JPanel parent, String text, java.awt.event.ActionListener action) {
         JButton btn = createSideButton(text, action);
         parent.add(btn);
         parent.add(Box.createRigidArea(new Dimension(0, 10)));
     }
 
+    /**
+     * サイドメニュー用のボタンを生成する。
+     * @param text   ボタンラベル
+     * @param action クリック時の動作
+     * @return スタイル適用済みの JButton
+     */
     private JButton createSideButton(String text, java.awt.event.ActionListener action) {
         JButton btn = new JButton(text);
         btn.setMaximumSize(new Dimension(180, 40));
@@ -143,6 +164,10 @@ public class SwingMain extends JFrame {
         return btn;
     }
 
+    /**
+     * テーマ切替ボタンのラベルを現在の状態(darkMode)に応じて返す。
+     * @return ボタンに表示するラベル文字列
+     */
     private String themeButtonLabel() {
         return darkMode ? "☀ ライトモード" : "☾ ダークモード";
     }
@@ -155,7 +180,10 @@ public class SwingMain extends JFrame {
         if (themeButton != null) themeButton.setText(themeButtonLabel());
     }
 
-    /** FlatLaf を切替える(クラスパスに無い場合は何もしない) */
+    /**
+     * FlatLaf を切替える(クラスパスに無い場合は何もしない)。
+     * @param dark true ならダーク、false ならライトテーマを適用
+     */
     private static void applyTheme(boolean dark) {
         if (!FLATLAF_AVAILABLE) return;
         try {
@@ -169,7 +197,10 @@ public class SwingMain extends JFrame {
         }
     }
 
-    /** 中央パネルを差し替える */
+    /**
+     * 中央パネルを差し替えて再描画する。
+     * @param panel 表示したいパネル
+     */
     public void showPanel(JPanel panel) {
         centerPanel.removeAll();
         centerPanel.add(panel, BorderLayout.CENTER);
@@ -187,26 +218,63 @@ public class SwingMain extends JFrame {
     }
 
     // 共有状態へのアクセサ -------------------------------------------------
+
+    /**
+     * @return 全レシピ管理オブジェクト
+     */
     public AllRecipeList getAllRecipeList() { return allRecipeList; }
+
+    /**
+     * @return 食材マスタ
+     */
     public IngredientMaster getIngredientMaster() { return ingredientMaster; }
+
+    /**
+     * @return 現在選択中のAIプロバイダー
+     */
     public RecipeAIService.Provider getCurrentAiProvider() { return currentAiProvider; }
+
+    /**
+     * 現在のAIプロバイダーを切替えて Preferences に保存する。
+     * @param p 切替先のプロバイダー
+     */
     public void setCurrentAiProvider(RecipeAIService.Provider p) {
         this.currentAiProvider = p;
         if (p != null) PREFS.put("aiProvider", p.name());
     }
-    /** 現在選択中プロバイダーの復号済みAPIキーを返す */
+
+    /**
+     * 現在選択中プロバイダーの復号済みAPIキーを返す。
+     * @return APIキー(未設定または復号失敗時は空文字)
+     */
     public String getCurrentApiKey() { return apiKeyStore.getKey(currentAiProvider); }
-    /** 指定プロバイダーのAPIキー(復号済み) */
+
+    /**
+     * 指定プロバイダーのAPIキー(復号済み)を返す。
+     * @param p 対象プロバイダー
+     * @return APIキー(未設定時は空文字)
+     */
     public String getApiKeyFor(RecipeAIService.Provider p) { return apiKeyStore.getKey(p); }
-    /** 指定プロバイダーのAPIキーを暗号化して保存(空文字なら削除) */
+
+    /**
+     * 指定プロバイダーのAPIキーを暗号化して保存する(空文字なら削除)。
+     * @param p        対象プロバイダー
+     * @param plainKey 平文のAPIキー(空文字で削除)
+     */
     public void setApiKeyFor(RecipeAIService.Provider p, String plainKey) { apiKeyStore.setKey(p, plainKey); }
 
     /**
      * 現在選択中プロバイダーの利用モデル名を返す。
-     * 保存値が無い場合はそのプロバイダーの先頭モデル(getAvailableModels()[0])にフォールバック
+     * 保存値が無い場合はそのプロバイダーの先頭モデル(getAvailableModels()[0])にフォールバック。
+     * @return 利用モデル名(未設定時は先頭モデル)
      */
     public String getCurrentModelName() { return getModelFor(currentAiProvider); }
 
+    /**
+     * 指定プロバイダーで保存済みのモデル名を返す。
+     * @param p 対象プロバイダー
+     * @return 保存値があればそれ、無ければそのプロバイダーの先頭モデル
+     */
     public String getModelFor(RecipeAIService.Provider p) {
         if (p == null) return "";
         String saved = PREFS.get("aiModel." + p.name(), "");
@@ -216,7 +284,11 @@ public class SwingMain extends JFrame {
         return models.length > 0 ? models[0] : "";
     }
 
-    /** 指定プロバイダーの利用モデル名を保存する */
+    /**
+     * 指定プロバイダーの利用モデル名を保存する。空文字なら削除動作。
+     * @param p     対象プロバイダー
+     * @param model 保存するモデル名(空文字で削除)
+     */
     public void setModelFor(RecipeAIService.Provider p, String model) {
         if (p == null) return;
         if (model == null || model.isEmpty()) {
@@ -226,9 +298,16 @@ public class SwingMain extends JFrame {
         }
     }
 
-    /** 互換用: 現在のプロバイダーに対してモデルを保存 */
+    /**
+     * 互換用: 現在のプロバイダーに対してモデルを保存する。
+     * @param m 保存するモデル名
+     */
     public void setCurrentModelName(String m) { setModelFor(currentAiProvider, m); }
 
+    /**
+     * アプリのエントリーポイント。Look&Feel を適用してから JFrame を生成・表示する。
+     * @param args 未使用
+     */
     public static void main(String[] args) {
         // 起動時に保存されたテーマを適用(無ければLight)
         boolean dark = "dark".equals(PREFS.get(PREF_THEME, "light"));
