@@ -5,6 +5,7 @@ import main.java.AI.RecipeAIService;
 import main.java.AI.SecureKeyStore;
 import main.java.Recipe.AllRecipeList;
 import main.java.Recipe.IngredientMaster;
+import main.java.UI.DataIOPanel;
 import main.java.UI.DeleteRecipePanel;
 import main.java.UI.RegisterRecipePanel;
 import main.java.UI.SettingsPanel;
@@ -113,6 +114,7 @@ public class SwingMain extends JFrame {
         addSideButton(sideMenu, "レシピ閲覧", e -> showPanel(new ViewRecipePanel(this)));
         addSideButton(sideMenu, "レシピ削除", e -> showPanel(new DeleteRecipePanel(this)));
         addSideButton(sideMenu, "AI設定",   e -> showPanel(new SettingsPanel(this)));
+        addSideButton(sideMenu, "データ入出力", e -> showPanel(new DataIOPanel(this)));
 
         sideMenu.add(Box.createVerticalGlue());
 
@@ -216,8 +218,6 @@ public class SwingMain extends JFrame {
         welcome.add(label, BorderLayout.CENTER);
         showPanel(welcome);
     }
-
-    // 共有状態へのアクセサ -------------------------------------------------
 
     /**
      * @return 全レシピ管理オブジェクト

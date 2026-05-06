@@ -61,6 +61,12 @@ class ViewRecipePanel {
 class DeleteRecipePanel {
 }
 
+class DataIOPanel {
+    - doExport(owner): void
+    - doImport(owner): void
+    - wrapText(text): JComponent
+}
+
 class SettingsPanel {
     - updateModelCombo(providerCombo, modelCombo): void
 }
@@ -157,6 +163,18 @@ class AllRecipeList {
     + read(): void  // no-op (互換用)
     + write(): void // no-op (互換用)
 }
+
+class RecipeIO <<utility>> {
+    + {static} FORMAT_VERSION: int = 1
+    + {static} exportToJson(recipes: List<Recipe>): String
+    + {static} parseFromJson(json, ingredientMaster): List<Recipe>
+}
+
+note right of RecipeIO
+  外部ライブラリに依存せず純Javaで
+  レシピの JSON 入出力を行う。
+  バックアップや別端末への移行に利用
+end note
 
 ' ===== 永続化層 =====
 class RecipeRepository {
@@ -311,6 +329,10 @@ SwingMain o--> RegisterRecipePanel : creates >
 SwingMain o--> ViewRecipePanel    : creates >
 SwingMain o--> DeleteRecipePanel  : creates >
 SwingMain o--> SettingsPanel      : creates >
+SwingMain o--> DataIOPanel        : creates >
+DataIOPanel ..> SwingMain
+DataIOPanel ..> RecipeIO : uses
+DataIOPanel ..> UIComponents
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 
 RegisterRecipePanel ..> SwingMain
