@@ -155,8 +155,6 @@ public final class RecipeIO {
         return new Ingredient(name, IngredientCategory.OTHER);
     }
 
-    // ---- 簡易 JSON ヘルパ -----------------------------------------------------
-
     /**
      * "key":"value" 形式の文字列値を抽出する(unescape 済みで返す)。
      * @param obj 検索対象 JSON

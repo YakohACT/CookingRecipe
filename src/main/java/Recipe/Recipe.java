@@ -6,7 +6,7 @@ import java.util.EnumSet;
 /**
  * レシピ情報を管理するクラス。
  * 1つのレシピは複数のカテゴリーを持つことができる。
- * 永続化は SQLite が担当するため Serializable は実装しない。
+ * Serializable は廃止
  * id はDB主キー(0は未永続化を表す)。
  */
 public class Recipe {
