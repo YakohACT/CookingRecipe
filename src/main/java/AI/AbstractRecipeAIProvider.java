@@ -23,10 +23,22 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception;
 
     /**
-     * このプロバイダーで選択可能なモデル名の配列を返す。
+     * このプロバイダーで選択可能なモデル名の配列を返す(静的フォールバック)。
      * @return モデル名配列
      */
     public abstract String[] getAvailableModels();
+
+    /**
+     * APIキーを使って動的にモデル一覧を取得する。
+     * デフォルト実装は {@link #getAvailableModels()} の静的フォールバックを返す。
+     * 各プロバイダーは必要に応じてオーバーライドしてHTTPリストAPIを叩く。
+     * 失敗時は静的フォールバックを返すこと(例外を呼び出し側へ漏らさない)。
+     * @param apiKey APIキー(Ollamaは未使用、null/空文字許容)
+     * @return 動的取得できたモデル名配列。失敗時はフォールバック
+     */
+    public String[] fetchAvailableModels(String apiKey) {
+        return getAvailableModels();
+    }
 
     /**
      * 食材候補からレシピを提案させるプロンプトを構築する。
@@ -236,6 +248,34 @@ public abstract class AbstractRecipeAIProvider {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * JSON 文字列内に出現する `"key":"value"` パターンの value をすべて収集する。
+     * モデル一覧API のように `[{"id":"..."},{"id":"..."},...]` の "id" を全件取りたい時に使う。
+     * @param json 検索対象 JSON 文字列
+     * @param key  対象キー名
+     * @return 抽出された値のリスト(順序保持、unescape 済み)
+     */
+    protected static java.util.List<String> extractAllJsonStrings(String json, String key) {
+        java.util.List<String> results = new java.util.ArrayList<>();
+        if (json == null || key == null) return results;
+        String pattern = "\"" + key + "\"";
+        int pos = 0;
+        while (true) {
+            int keyIdx = json.indexOf(pattern, pos);
+            if (keyIdx < 0) break;
+            int colonIdx = json.indexOf(":", keyIdx + pattern.length());
+            if (colonIdx < 0) break;
+            int valStart = json.indexOf("\"", colonIdx);
+            if (valStart < 0) break;
+            valStart++;
+            int valEnd = findUnescapedQuote(json, valStart);
+            if (valEnd < 0) break;
+            results.add(jsonUnescape(json.substring(valStart, valEnd)));
+            pos = valEnd + 1;
+        }
+        return results;
     }
 
     /**

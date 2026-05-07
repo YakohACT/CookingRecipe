@@ -159,6 +159,40 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         return sb.toString();
     }
 
+    /**
+     * /v1beta/models?key=KEY を叩いて利用可能なモデル名を動的取得する。
+     * `models/` プレフィックスを除去し、`gemini-` 系のみに絞り込む。
+     * 失敗時は静的フォールバック ({@link #getAvailableModels()}) を返す。
+     * @param apiKey Gemini APIキー
+     * @return 利用可能なモデル一覧
+     */
+    @Override
+    public String[] fetchAvailableModels(String apiKey) {
+        if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
+        try {
+            String url = "https://generativelanguage.googleapis.com/v1beta/models?key="
+                    + java.net.URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8);
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(10000);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+
+            String body = readStream(conn.getInputStream());
+            java.util.List<String> names = extractAllJsonStrings(body, "name");
+            java.util.List<String> result = new java.util.ArrayList<>();
+            for (String n : names) {
+                String stripped = n.startsWith("models/") ? n.substring("models/".length()) : n;
+                if (!stripped.startsWith("gemini-")) continue; // 埋め込み等を除外
+                if (!result.contains(stripped)) result.add(stripped);
+            }
+            java.util.Collections.sort(result);
+            return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
+        } catch (Exception e) {
+            return getAvailableModels();
+        }
+    }
+
     @Override
     public String[] getAvailableModels() {
         // 2026年4月時点のアクティブモデル

@@ -73,6 +73,38 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
         return sb.toString();
     }
 
+    /**
+     * /v1/models へGETしてAnthropicが提供する claude-* モデルを動的取得する。
+     * 失敗時は静的フォールバック ({@link #getAvailableModels()}) を返す。
+     * @param apiKey Claude APIキー
+     * @return claude-* モデル一覧
+     */
+    @Override
+    public String[] fetchAvailableModels(String apiKey) {
+        if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL("https://api.anthropic.com/v1/models").openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("x-api-key", apiKey);
+            conn.setRequestProperty("anthropic-version", "2023-06-01");
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(10000);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+
+            String body = readStream(conn.getInputStream());
+            java.util.List<String> ids = extractAllJsonStrings(body, "id");
+            java.util.List<String> result = new java.util.ArrayList<>();
+            for (String id : ids) {
+                if (id.startsWith("claude-") && !result.contains(id)) result.add(id);
+            }
+            // 新しいモデルが上に来るよう逆順ソート
+            result.sort(java.util.Comparator.reverseOrder());
+            return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
+        } catch (Exception e) {
+            return getAvailableModels();
+        }
+    }
+
     @Override
     public String[] getAvailableModels() {
         // 2026年4月時点のアクティブモデル (claude-sonnet-4 / claude-opus-4 は2026/4/20退役済み)
