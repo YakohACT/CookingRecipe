@@ -248,10 +248,19 @@ public class RegisterRecipePanel extends JPanel {
         for (String aiIngName : aiIngsRaw.split(",")) {
             String cleanName = aiIngName.trim();
             if (cleanName.isEmpty()) continue;
+            Ingredient resolved = null;
             for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) {
-                if (ing.getName().equals(cleanName) && !matched.contains(ing)) {
-                    matched.add(ing);
+                if (ing.getName().equals(cleanName)) {
+                    resolved = ing;
+                    break;
                 }
+            }
+            // AIが未知の食材を返した場合は OTHER カテゴリで自動的にマスタに追加
+            if (resolved == null) {
+                resolved = owner.getIngredientMaster().addIngredient(cleanName);
+            }
+            if (resolved != null && !matched.contains(resolved)) {
+                matched.add(resolved);
             }
         }
 

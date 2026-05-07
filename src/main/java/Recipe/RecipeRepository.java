@@ -293,15 +293,18 @@ public class RecipeRepository {
 
     /**
      * 食材名から {@link IngredientMaster} を引いて {@link Ingredient} を返す。
-     * マスタに存在しない場合は category を OTHER にした暫定オブジェクトを返す。
+     * マスタに存在しない場合は OTHER カテゴリで自動的にマスタ + database.csv に追加し、
+     * その Ingredient を返す。
      * @param name 食材名
-     * @return 解決された Ingredient (マスタに無ければカテゴリ OTHER の暫定値)
+     * @return 解決された Ingredient
      */
     private Ingredient lookupIngredient(String name) {
         for (Ingredient ing : ingredientMaster.getAllIngredients()) {
             if (ing.getName().equals(name)) return ing;
         }
-        return new Ingredient(name, IngredientCategory.OTHER);
+        // マスタに無い場合は OTHER で自動追加(database.csv にも書き込む)
+        Ingredient added = ingredientMaster.addIngredient(name);
+        return (added != null) ? added : new Ingredient(name, IngredientCategory.OTHER);
     }
 
     /** 読み込み中の中間状態を保持する内部Builder */

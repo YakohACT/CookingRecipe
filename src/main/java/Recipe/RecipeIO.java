@@ -141,7 +141,8 @@ public final class RecipeIO {
     }
 
     /**
-     * 食材マスタから名前一致で Ingredient を引き、無ければカテゴリ OTHER の暫定値を作る。
+     * 食材マスタから名前一致で Ingredient を引き、無ければ OTHER カテゴリで
+     * マスタ + database.csv に自動追加してから返す。
      * @param im   食材マスタ
      * @param name 食材名
      * @return 解決された Ingredient
@@ -151,6 +152,9 @@ public final class RecipeIO {
             for (Ingredient ing : im.getAllIngredients()) {
                 if (ing.getName().equals(name)) return ing;
             }
+            // マスタに無い場合は OTHER で自動追加(database.csv にも書き込む)
+            Ingredient added = im.addIngredient(name);
+            if (added != null) return added;
         }
         return new Ingredient(name, IngredientCategory.OTHER);
     }

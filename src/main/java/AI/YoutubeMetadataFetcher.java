@@ -38,21 +38,68 @@ public final class YoutubeMetadataFetcher {
      * @param url YouTubeの任意形式URL
      * @return 「【動画タイトル】… 【動画字幕(抜粋)】…」形式のテキスト(空文字あり)
      */
+    /** 概要欄がこの文字数未満なら情報不足とみなして Whisper 起動を許可する(URLは除外して数える) */
+    private static final int DESCRIPTION_SUFFICIENT_THRESHOLD = 150;
+
+    /**
+     * 後方互換用。食材名リストを渡せない呼び出しでは食材検出を行わず文字数のみで判定する。
+     * @param url YouTube URL
+     * @return 整形済みのテキスト(タイトル・概要欄・字幕の連結)
+     */
     public static String fetchSummary(String url) {
+        return fetchSummary(url, java.util.Collections.emptyList());
+    }
+
+    /**
+     * YouTube URL から「タイトル+概要欄+字幕」テキストを生成する。
+     * 概要欄は URL を除いた実質文字数が閾値以上、または食材名が1つでも含まれていれば
+     * 十分とみなし、Whisperによる音声書き起こしを行わない。
+     * 字幕も無く概要欄も不十分なときだけ Whisper にフォールバックする。
+     * @param url             YouTube URL
+     * @param ingredientNames 食材名リスト(概要欄に材料が記載されているか判定するため)
+     * @return 整形済みのテキスト
+     */
+    public static String fetchSummary(String url, java.util.List<String> ingredientNames) {
         String videoId = extractVideoId(url);
         if (videoId == null) return "";
 
         StringBuilder out = new StringBuilder();
+
+        // 1. タイトル (oEmbed)
         String title = fetchTitle(url);
         if (!title.isEmpty()) {
             out.append("【動画タイトル】\n").append(title).append("\n\n");
         }
-        // 1. YouTube公式の captionTracks を試す
-        String transcript = fetchTranscript(videoId);
+
+        // 2. watch ページを1回だけ取得し、概要欄と captionTracks を同時に抽出
+        String watchHtml = "";
+        try {
+            watchHtml = httpGet("https://www.youtube.com/watch?v=" + videoId, "text/html");
+        } catch (Exception ignore) {}
+
+        // 3. 概要欄 (shortDescription)
+        String description = extractDescription(watchHtml);
+        if (!description.isEmpty()) {
+            String shown = description.length() > MAX_TRANSCRIPT_LENGTH
+                    ? description.substring(0, MAX_TRANSCRIPT_LENGTH) + "…"
+                    : description;
+            out.append("【動画概要欄】\n").append(shown).append("\n\n");
+        }
+
+        // 4. 公式字幕 (captionTracks → timedtext)
+        String transcript = extractTranscript(watchHtml);
         String source = "字幕";
-        // 2. 公式字幕が無い場合は Whisper パイプラインにフォールバック
-        if (transcript.isEmpty() && WhisperTranscriber.isAvailable()) {
-            System.out.println("[YoutubeMetadataFetcher] 公式字幕無し → Whisper で文字起こしを実行します");
+
+        // 5. 字幕無し かつ 概要欄が情報不足のときだけ Whisper を起動
+        //    十分性の判定: URL除外後の文字数が閾値以上 または 食材名が1つ以上含まれる
+        String descriptionStripped = stripUrls(description);
+        boolean longEnough = descriptionStripped.length() >= DESCRIPTION_SUFFICIENT_THRESHOLD;
+        boolean hasIngredient = containsAnyIngredient(descriptionStripped, ingredientNames);
+        boolean descriptionSufficient = longEnough || hasIngredient;
+        if (transcript.isEmpty() && !descriptionSufficient && WhisperTranscriber.isAvailable()) {
+            System.out.println("[YoutubeMetadataFetcher] 字幕無し＋概要欄不十分(URL除外後 "
+                    + descriptionStripped.length() + "字, 食材検出="
+                    + hasIngredient + ") → Whisperで文字起こしを実行します");
             transcript = WhisperTranscriber.transcribe(url);
             if (!transcript.isEmpty()) source = "Whisper文字起こし";
         }
@@ -63,6 +110,91 @@ public final class YoutubeMetadataFetcher {
             out.append("【動画").append(source).append("(抜粋)】\n").append(transcript);
         }
         return out.toString().trim();
+    }
+
+    /**
+     * 文字列から http(s):// ではじまる URL を除去し、空白を整える。
+     * 概要欄の「実質的な文字数」を測るために使う。
+     * @param s 元の文字列
+     * @return URL除去後の文字列(null入力時は空文字)
+     */
+    private static String stripUrls(String s) {
+        if (s == null || s.isEmpty()) return "";
+        return s.replaceAll("https?://\\S+", "")
+                .replaceAll("[\\s\\u3000]+", " ")
+                .trim();
+    }
+
+    /**
+     * 文字列に食材名のいずれかが含まれているかを判定する。
+     * @param text            検索対象テキスト
+     * @param ingredientNames 食材名リスト
+     * @return いずれか1つでもマッチすれば true
+     */
+    private static boolean containsAnyIngredient(String text, java.util.List<String> ingredientNames) {
+        if (text == null || text.isEmpty() || ingredientNames == null || ingredientNames.isEmpty()) return false;
+        for (String name : ingredientNames) {
+            if (name != null && !name.isEmpty() && text.contains(name)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * watch ページのHTMLから {@code shortDescription} を抜き出す。
+     * 動画の概要欄(投稿者が書いた説明文)に相当する。
+     * @param html watch ページのHTML
+     * @return 概要欄テキスト(失敗/不在時は空文字)
+     */
+    private static String extractDescription(String html) {
+        if (html == null || html.isEmpty()) return "";
+        // ytInitialPlayerResponse 内の "shortDescription":"..." を探す
+        int idx = html.indexOf("\"shortDescription\":\"");
+        if (idx < 0) return "";
+        int valStart = idx + "\"shortDescription\":\"".length();
+        int valEnd = findUnescapedQuote(html, valStart);
+        if (valEnd < 0 || valEnd <= valStart) return "";
+        return jsonUnescape(html.substring(valStart, valEnd)).trim();
+    }
+
+    /**
+     * watch ページのHTMLから captionTracks を抽出し、適切な言語の timedtext XML を
+     * ダウンロードしてテキスト化する。
+     * @param html watch ページのHTML
+     * @return 字幕テキスト(失敗/字幕なしの場合は空文字)
+     */
+    private static String extractTranscript(String html) {
+        if (html == null || html.isEmpty()) return "";
+        try {
+            int idx = html.indexOf("\"captionTracks\":");
+            if (idx == -1) return "";
+
+            String tail = html.substring(idx);
+            Matcher m = Pattern.compile(
+                    "\"baseUrl\"\\s*:\\s*\"([^\"]+)\"[^}]*\"languageCode\"\\s*:\\s*\"([^\"]+)\"")
+                    .matcher(tail);
+
+            Map<String, String> langToUrl = new LinkedHashMap<>();
+            while (m.find()) {
+                String baseUrl = m.group(1).replace("\\u0026", "&").replace("\\/", "/");
+                String lang = m.group(2);
+                langToUrl.putIfAbsent(lang, baseUrl);
+            }
+            if (langToUrl.isEmpty()) return "";
+
+            String chosen = null;
+            for (String lang : new String[]{"ja", "ja-JP", "en", "en-US", "en-GB"}) {
+                if (langToUrl.containsKey(lang)) {
+                    chosen = langToUrl.get(lang);
+                    break;
+                }
+            }
+            if (chosen == null) chosen = langToUrl.values().iterator().next();
+
+            String xml = httpGet(chosen, "text/xml");
+            return parseTranscriptXml(xml);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /**
@@ -107,50 +239,6 @@ public final class YoutubeMetadataFetcher {
         }
     }
 
-    /**
-     * watch ページに埋まっている ytInitialPlayerResponse から captionTracks を取り出し、
-     * 適切な言語の baseUrl を叩いて timedtext XML を取得し、テキスト化する。
-     * @param videoId 動画ID
-     * @return 字幕テキスト(失敗時/字幕なしの場合は空文字)
-     */
-    private static String fetchTranscript(String videoId) {
-        try {
-            String html = httpGet("https://www.youtube.com/watch?v=" + videoId, "text/html");
-            if (html.isEmpty()) return "";
-
-            int idx = html.indexOf("\"captionTracks\":");
-            if (idx == -1) return "";
-
-            // 同一トラックエントリ内の baseUrl と languageCode をペアで抽出する
-            String tail = html.substring(idx);
-            Matcher m = Pattern.compile(
-                    "\"baseUrl\"\\s*:\\s*\"([^\"]+)\"[^}]*\"languageCode\"\\s*:\\s*\"([^\"]+)\"")
-                    .matcher(tail);
-
-            Map<String, String> langToUrl = new LinkedHashMap<>();
-            while (m.find()) {
-                String baseUrl = m.group(1).replace("\\u0026", "&").replace("\\/", "/");
-                String lang = m.group(2);
-                langToUrl.putIfAbsent(lang, baseUrl);
-            }
-            if (langToUrl.isEmpty()) return "";
-
-            // 言語優先度
-            String chosen = null;
-            for (String lang : new String[]{"ja", "ja-JP", "en", "en-US", "en-GB"}) {
-                if (langToUrl.containsKey(lang)) {
-                    chosen = langToUrl.get(lang);
-                    break;
-                }
-            }
-            if (chosen == null) chosen = langToUrl.values().iterator().next();
-
-            String xml = httpGet(chosen, "text/xml");
-            return parseTranscriptXml(xml);
-        } catch (Exception e) {
-            return "";
-        }
-    }
 
     /**
      * timedtext の {@code <text>...</text>} を改行区切りで連結してプレーンテキスト化する。

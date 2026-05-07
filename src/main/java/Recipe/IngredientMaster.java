@@ -4,8 +4,11 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * CSVから食材データを読み込み管理するクラス。
@@ -106,5 +109,64 @@ public class IngredientMaster {
      */
     public ArrayList<Ingredient> getAllIngredients() {
         return new ArrayList<>(database.keySet());
+    }
+
+    /**
+     * 食材を OTHER カテゴリで追加する(同名の食材が既にあればそれを返す)。
+     * メモリ上のマスタ・database.csv の両方に反映される。
+     * @param name 食材名
+     * @return 追加された(または既存の)Ingredient。空文字/null の場合は null
+     */
+    public Ingredient addIngredient(String name) {
+        return addIngredient(name, IngredientCategory.OTHER);
+    }
+
+    /**
+     * 食材を指定カテゴリで追加する(同名の食材が既にあればそれを返す)。
+     * メモリ上のマスタ・database.csv の両方に反映される。
+     * @param name     食材名
+     * @param category 食材カテゴリ
+     * @return 追加された(または既存の)Ingredient。空文字/null の場合は null
+     */
+    public Ingredient addIngredient(String name, IngredientCategory category) {
+        if (name == null) return null;
+        String trimmed = name.trim();
+        if (trimmed.isEmpty()) return null;
+        // 既に同名の食材があればそれを返す(equalsは名前一致)
+        for (Ingredient existing : database.keySet()) {
+            if (existing.getName().equals(trimmed)) return existing;
+        }
+        Ingredient newIng = new Ingredient(trimmed, category);
+        database.put(newIng, trimmed);
+        appendToCsv(category, trimmed);
+        return newIng;
+    }
+
+    /**
+     * database.csv の末尾に "<CATEGORY>,<name>" を追記する。
+     * 既に同じ行があればスキップする。失敗時は黙殺する(マスタ追加自体は in-memory に反映済み)。
+     * @param category 食材カテゴリ
+     * @param name     食材名
+     */
+    private void appendToCsv(IngredientCategory category, String name) {
+        File csv = locateCsv();
+        if (csv == null) {
+            // 既存のCSVが見つからない場合は実行カレントに新規作成する
+            csv = new File("database.csv");
+        }
+        String entry = category.name() + "," + name;
+        try {
+            List<String> lines = csv.exists()
+                    ? Files.readAllLines(csv.toPath(), StandardCharsets.UTF_8)
+                    : new ArrayList<>();
+            // 既に同じ行がある場合は何もしない(冪等)。BOM混入も考慮
+            for (String l : lines) {
+                if (l.replace("﻿", "").trim().equals(entry)) return;
+            }
+            lines.add(entry);
+            Files.write(csv.toPath(), lines, StandardCharsets.UTF_8);
+        } catch (Exception ignore) {
+            // 読み書き失敗は無視。in-memoryの追加は既に成功している
+        }
     }
 }

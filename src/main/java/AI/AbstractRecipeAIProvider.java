@@ -59,9 +59,15 @@ public abstract class AbstractRecipeAIProvider {
         //   - YouTube以外 → HTMLを取得してテキスト化(main.java.AI.WebPageFetcher)
         String pageText = "";
         if (!url.trim().isEmpty()) {
-            pageText = isYoutube
-                    ? YoutubeMetadataFetcher.fetchSummary(url)
-                    : WebPageFetcher.fetchSummary(url);
+            if (isYoutube) {
+                // 概要欄に材料が記載されているか判定するため食材名リストを渡す
+                java.util.List<String> ingNames = allIngredients.stream()
+                        .map(Ingredient::getName)
+                        .collect(Collectors.toList());
+                pageText = YoutubeMetadataFetcher.fetchSummary(url, ingNames);
+            } else {
+                pageText = WebPageFetcher.fetchSummary(url);
+            }
         }
 
         StringBuilder sb = new StringBuilder();
@@ -73,7 +79,9 @@ public abstract class AbstractRecipeAIProvider {
             sb.append(pageText).append("\n\n");
         }
         sb.append("【ルール】\n");
-        sb.append("・上記リストに含まれる食材だけを使うこと\n");
+        sb.append("・食材は【利用可能な食材】リストから優先して選ぶこと。同じ役割の食材がリストにあれば、必ずそちらを使うこと(例: リストに「醤油」があるのに「だし醤油」と書かない)\n");
+        sb.append("・リスト内の食材だけで成立しないレシピのときに限り、リスト外の食材名を使ってよい(その場合も最小限に留める)\n");
+        sb.append("・食材名は【利用可能な食材】リストの表記をそのまま使うこと(例: リストの「鶏もも」を「鶏もも肉」と書き換えない)\n");
         sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
         if (isYoutube) {
             if (!pageText.isEmpty()) {
@@ -88,7 +96,7 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("\n【出力形式】\n");
         sb.append("以下のキーを持つJSONオブジェクトのみを返してください。\n");
         sb.append("- title: 料理名 (文字列)\n");
-        sb.append("- ingredients: 上記リストから選んだ食材名 (文字列の配列)\n");
+        sb.append("- ingredients: 食材名の配列 (文字列の配列)。原則【利用可能な食材】リストの表記から選ぶこと\n");
         return sb.toString();
     }
 
