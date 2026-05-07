@@ -66,6 +66,22 @@ public class RecipeAIService {
     }
 
     /**
+     * 動的にプロバイダのAPIへ問い合わせて利用可能なモデル一覧を取得する。
+     * Ollama は localhost:11434/api/tags、それ以外はプロバイダの models エンドポイントを叩く。
+     * 失敗時は各プロバイダの静的フォールバックが返る(例外は呼び出し側へ漏れない)。
+     * @param provider 対象プロバイダー
+     * @param apiKey   APIキー(Ollamaは未使用、null/空文字許容)
+     * @return モデル名配列
+     */
+    public String[] fetchModelsForProvider(Provider provider, String apiKey) {
+        if (provider == Provider.OLLAMA) {
+            // Ollamaは1回 /api/tags を叩けば全モデルが取れるのでサブクラス集約は不要
+            return new LlamaProvider().fetchAvailableModels(apiKey);
+        }
+        return createProvider(provider, "").fetchAvailableModels(apiKey);
+    }
+
+    /**
      * プロバイダー(と Ollama の場合は modelName)から具象クラスを生成する。
      * @param provider  AIプロバイダー
      * @param modelName Ollama の場合のサブクラス振り分けに使うモデル名

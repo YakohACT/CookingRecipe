@@ -47,12 +47,20 @@ public final class YoutubeMetadataFetcher {
         if (!title.isEmpty()) {
             out.append("【動画タイトル】\n").append(title).append("\n\n");
         }
+        // 1. YouTube公式の captionTracks を試す
         String transcript = fetchTranscript(videoId);
+        String source = "字幕";
+        // 2. 公式字幕が無い場合は Whisper パイプラインにフォールバック
+        if (transcript.isEmpty() && WhisperTranscriber.isAvailable()) {
+            System.out.println("[YoutubeMetadataFetcher] 公式字幕無し → Whisper で文字起こしを実行します");
+            transcript = WhisperTranscriber.transcribe(url);
+            if (!transcript.isEmpty()) source = "Whisper文字起こし";
+        }
         if (!transcript.isEmpty()) {
             if (transcript.length() > MAX_TRANSCRIPT_LENGTH) {
                 transcript = transcript.substring(0, MAX_TRANSCRIPT_LENGTH) + "…";
             }
-            out.append("【動画字幕(抜粋)】\n").append(transcript);
+            out.append("【動画").append(source).append("(抜粋)】\n").append(transcript);
         }
         return out.toString().trim();
     }

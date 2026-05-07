@@ -212,6 +212,23 @@ class YoutubeMetadataFetcher <<utility>> {
     - {static} parseTranscriptXml(xml: String): String
 }
 
+class WhisperTranscriber <<utility>> {
+    + {static} isAvailable(): boolean
+    + {static} transcribe(youtubeUrl: String): String
+    - {static} runProcess(workingDir, timeout, command...): int
+    - {static} locateTool(name: String): Path
+    - {static} locateWhisperCli(): Path
+    - {static} locateModel(): Path
+}
+
+note right of WhisperTranscriber
+  YouTube字幕が無い時のフォールバック。
+  yt-dlp で 16kHz mono WAV を抽出し、
+  whisper.cpp で文字起こし。
+  バイナリ&モデルは setup-whisper.bat で
+  lib/tools/, lib/models/ に取得する
+end note
+
 note right of YoutubeMetadataFetcher
   oEmbed でタイトル取得 +
   watch ページから captionTracks を抽出して
@@ -383,6 +400,7 @@ RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
 RecipeAIService     +-- Provider
 AbstractRecipeAIProvider ..> WebPageFetcher : fetches non-YouTube URL
 AbstractRecipeAIProvider ..> YoutubeMetadataFetcher : fetches YouTube title+transcript
+YoutubeMetadataFetcher   ..> WhisperTranscriber : fallback when no captions
 AbstractRecipeAIProvider ..> Ingredient
 GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
 

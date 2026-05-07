@@ -28,6 +28,36 @@ public abstract class OllamaProvider extends AbstractRecipeAIProvider {
 
     /** Ollama サーバーのデフォルトURL */
     protected static final String OLLAMA_URL = "http://localhost:11434/api/chat";
+    /** Ollama インストール済みモデル一覧API */
+    protected static final String OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
+
+    /**
+     * ローカルOllamaに `GET /api/tags` を送って実際にpull済みのモデル名を取得する。
+     * Ollamaが起動していない/失敗時はサブクラスの静的リスト({@link #getAvailableModels()})にフォールバック。
+     * @param apiKey 未使用(API互換のため受け取るが無視する)
+     * @return Ollamaに導入済みのモデル名配列
+     */
+    @Override
+    public String[] fetchAvailableModels(String apiKey) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(OLLAMA_TAGS_URL).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(5000);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+            String body = readStream(conn.getInputStream());
+            // {"models":[{"name":"llama3:8b","modified_at":"...",...}, ...]}
+            java.util.List<String> names = extractAllJsonStrings(body, "name");
+            java.util.List<String> uniq = new java.util.ArrayList<>();
+            for (String n : names) {
+                if (n != null && !n.isEmpty() && !uniq.contains(n)) uniq.add(n);
+            }
+            java.util.Collections.sort(uniq);
+            return uniq.isEmpty() ? getAvailableModels() : uniq.toArray(new String[0]);
+        } catch (Exception e) {
+            return getAvailableModels();
+        }
+    }
 
     @Override
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {

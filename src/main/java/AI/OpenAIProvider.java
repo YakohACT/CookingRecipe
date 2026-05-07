@@ -74,6 +74,57 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
         return sb.toString();
     }
 
+    /**
+     * /v1/models へGETしてアカウントで利用可能なモデルIDを動的取得する。
+     * チャット系(gpt-/o1/o3/o4/chatgpt-)のみフィルタし、音声・埋め込み等の非対象を除外する。
+     * 失敗時は静的フォールバック ({@link #getAvailableModels()}) を返す。
+     * @param apiKey OpenAI APIキー
+     * @return 利用可能なチャットモデル一覧
+     */
+    @Override
+    public String[] fetchAvailableModels(String apiKey) {
+        if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL("https://api.openai.com/v1/models").openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(10000);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+
+            String body = readStream(conn.getInputStream());
+            java.util.List<String> ids = extractAllJsonStrings(body, "id");
+            java.util.List<String> filtered = new java.util.ArrayList<>();
+            for (String id : ids) {
+                if (!isChatModel(id)) continue;
+                filtered.add(id);
+            }
+            // モデル名で安定ソート
+            java.util.Collections.sort(filtered);
+            return filtered.isEmpty() ? getAvailableModels() : filtered.toArray(new String[0]);
+        } catch (Exception e) {
+            return getAvailableModels();
+        }
+    }
+
+    /**
+     * モデルIDがチャット用途かを判定する(/v1/chat/completions に投げて使えるもの)。
+     * @param id OpenAIモデルID
+     * @return チャット用途として妥当なら true
+     */
+    private static boolean isChatModel(String id) {
+        if (id == null) return false;
+        String s = id.toLowerCase();
+        // チャット系プレフィックス
+        boolean chatPrefix = s.startsWith("gpt-") || s.startsWith("o1") || s.startsWith("o3")
+                || s.startsWith("o4") || s.startsWith("chatgpt-");
+        if (!chatPrefix) return false;
+        // 音声/埋め込み/画像/転写は除外
+        return !s.contains("audio") && !s.contains("realtime") && !s.contains("transcribe")
+                && !s.contains("tts") && !s.contains("embedding") && !s.contains("whisper")
+                && !s.contains("dall-e") && !s.contains("image");
+    }
+
     @Override
     public String[] getAvailableModels() {
         // 2026年4月時点で /v1/chat/completions エンドポイントに対応しているモデル
