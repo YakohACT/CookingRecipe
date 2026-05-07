@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
 REM   main.java.Recipe.Recipe Manager Pro - launcher (no console window)
