@@ -71,9 +71,4 @@ public class AllRecipeList {
         }
     }
 
-    /** SQLite移行に伴い不要になったが、既存呼び出し(終了時など)を壊さないよう no-op として残す */
-    public void write() {}
-
-    /** 旧API互換のno-op。コンストラクタで読み込み済み */
-    public void read() {}
 }

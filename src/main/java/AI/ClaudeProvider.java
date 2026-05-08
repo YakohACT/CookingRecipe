@@ -2,8 +2,10 @@ package main.java.AI;
 
 import main.java.Recipe.Ingredient;
 
-import java.io.*;
-import java.net.*;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
@@ -25,12 +27,14 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
 
         HttpURLConnection conn = (HttpURLConnection) new URL("https://api.anthropic.com/v1/messages").openConnection();
         conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; utf-8");
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         conn.setRequestProperty("x-api-key", apiKey);
         conn.setRequestProperty("anthropic-version", "2023-06-01");
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(60000);
         conn.setDoOutput(true);
         try (OutputStream os = conn.getOutputStream()) {
-            os.write(json.getBytes("utf-8"));
+            os.write(json.getBytes(StandardCharsets.UTF_8));
         }
 
         int responseCode = conn.getResponseCode();
@@ -39,38 +43,8 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
             throw new Exception("Claude API エラー (HTTP " + responseCode + "): " + errorBody);
         }
 
-        String jsonRes = readStream(conn.getInputStream());
-
-        // content[0].text からJSON文字列を抜き出す（コロン後の空白有無に対応）
-        int keyIdx = jsonRes.indexOf("\"text\":");
-        if (keyIdx == -1) {
-            throw new Exception("レスポンス解析失敗: textフィールドが見つかりません。レスポンス: " + jsonRes);
-        }
-        int valueQuote = jsonRes.indexOf("\"", keyIdx + 7);
-        if (valueQuote == -1) {
-            throw new Exception("レスポンス解析失敗: textフィールドの値が見つかりません。レスポンス: " + jsonRes);
-        }
-        int start = valueQuote + 1;
-        int end = findUnescapedQuote(jsonRes, start);
-        if (end == -1) throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
-
-        return parseJsonResponse(jsonRes.substring(start, end));
-    }
-
-    /**
-     * InputStream を UTF-8 文字列として読み切る。
-     * @param stream 入力ストリーム(null可)
-     * @return ストリーム内容の文字列(null入力時は空文字)
-     * @throws IOException 読み込み失敗時
-     */
-    private String readStream(InputStream stream) throws IOException {
-        if (stream == null) return "";
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, "utf-8"))) {
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-        }
-        return sb.toString();
+        // content[0].text からモデルが返したJSON文字列を抽出してパース
+        return extractAndParse(readStream(conn.getInputStream()), "text");
     }
 
     /**

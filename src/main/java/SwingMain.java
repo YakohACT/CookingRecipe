@@ -16,8 +16,6 @@ import main.java.UI.ViewRecipePanel;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.util.prefs.Preferences;
 
 /**
@@ -76,14 +74,8 @@ public class SwingMain extends JFrame {
 
         setTitle("Recipe Manager Pro");
         setSize(1000, 750);
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                allRecipeList.write();
-                System.exit(0);
-            }
-        });
+        // add/update/delete のたびに即時SQL反映するため、終了時の保存処理は不要
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         add(buildSideMenu(), BorderLayout.WEST);
 
@@ -127,10 +119,7 @@ public class SwingMain extends JFrame {
             sideMenu.add(Box.createRigidArea(new Dimension(0, 10)));
         }
 
-        addSideButton(sideMenu, "保存して終了", e -> {
-            allRecipeList.write();
-            System.exit(0);
-        });
+        addSideButton(sideMenu, "終了", e -> System.exit(0));
 
         return sideMenu;
     }

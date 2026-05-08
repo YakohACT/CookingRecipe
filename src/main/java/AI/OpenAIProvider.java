@@ -2,8 +2,10 @@ package main.java.AI;
 
 import main.java.Recipe.Ingredient;
 
-import java.io.*;
-import java.net.*;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 /**
@@ -27,11 +29,13 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
 
         HttpURLConnection conn = (HttpURLConnection) new URL("https://api.openai.com/v1/chat/completions").openConnection();
         conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; utf-8");
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(60000);
         conn.setDoOutput(true);
         try (OutputStream os = conn.getOutputStream()) {
-            os.write(json.getBytes("utf-8"));
+            os.write(json.getBytes(StandardCharsets.UTF_8));
         }
 
         int responseCode = conn.getResponseCode();
@@ -40,38 +44,8 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
             throw new Exception("OpenAI API エラー (HTTP " + responseCode + "): " + errorBody);
         }
 
-        String jsonRes = readStream(conn.getInputStream());
-
-        // choices[0].message.content からJSON文字列を抜き出す（コロン後の空白有無に対応）
-        int keyIdx = jsonRes.indexOf("\"content\":");
-        if (keyIdx == -1) {
-            throw new Exception("レスポンス解析失敗: contentフィールドが見つかりません。レスポンス: " + jsonRes);
-        }
-        int valueQuote = jsonRes.indexOf("\"", keyIdx + 10);
-        if (valueQuote == -1) {
-            throw new Exception("レスポンス解析失敗: contentフィールドの値が見つかりません。レスポンス: " + jsonRes);
-        }
-        int start = valueQuote + 1;
-        int end = findUnescapedQuote(jsonRes, start);
-        if (end == -1) throw new Exception("レスポンス解析失敗: contentフィールドの終端が見つかりません");
-
-        return parseJsonResponse(jsonRes.substring(start, end));
-    }
-
-    /**
-     * InputStream を UTF-8 文字列として読み切る。
-     * @param stream 入力ストリーム(null可)
-     * @return ストリーム内容の文字列(null入力時は空文字)
-     * @throws IOException 読み込み失敗時
-     */
-    private String readStream(InputStream stream) throws IOException {
-        if (stream == null) return "";
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, "utf-8"))) {
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-        }
-        return sb.toString();
+        // choices[0].message.content からモデルが返したJSON文字列を抽出してパース
+        return extractAndParse(readStream(conn.getInputStream()), "content");
     }
 
     /**

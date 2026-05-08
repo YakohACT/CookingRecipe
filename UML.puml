@@ -4,13 +4,13 @@ skinparam ClassAttributeIconSize 0
 ' ===== main.java.UI 層 =====
 class SwingMain {
     - {static} PREFS: Preferences
+    - {static} PREF_THEME: String
     - {static} FLATLAF_AVAILABLE: boolean
     - allRecipeList: AllRecipeList
     - ingredientMaster: IngredientMaster
     - centerPanel: JPanel
     - apiKeyStore: ApiKeyStore
     - currentAiProvider: RecipeAIService.Provider
-    - currentModelName: String
     - darkMode: boolean
     - themeButton: JButton
     + showPanel(panel: JPanel): void
@@ -26,6 +26,8 @@ class SwingMain {
     + setApiKeyFor(p, plainKey): void
     + getCurrentModelName(): String
     + setCurrentModelName(m): void
+    + getModelFor(p): String
+    + setModelFor(p, model): void
     + {static} main(args: String[]): void
 }
 
@@ -101,8 +103,9 @@ class Theme <<utility>> {
 
 class UIComponents <<utility>> {
     + {static} createStyledTextField(): JTextField
+    + {static} attachContextMenu(comp: JTextComponent): void
     + {static} createStyledRecipeList(model): JList<Recipe>
-    + {static} createDetailArea(): JTextArea
+    + {static} createDetailArea(): JEditorPane
     + {static} updateDetailArea(area, recipe): void
     + {static} addLeftAligned(panel, comp): void
     + {static} createPrimaryButton(text): JButton
@@ -172,7 +175,7 @@ class IngredientMaster {
     + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
     + getAllIngredients(): ArrayList<Ingredient>
     + addIngredient(name: String): Ingredient
-    + addIngredient(name, category): Ingredient
+    + addIngredient(name: String, category: IngredientCategory): Ingredient
     + replaceAll(ordered: List<Ingredient>): void
 }
 
@@ -183,8 +186,6 @@ class AllRecipeList {
     + updateRecipe(recipe: Recipe): void
     + deleteRecipe(recipe: Recipe): void
     + getRecipeList(): ArrayList<Recipe>
-    + read(): void  // no-op (互換用)
-    + write(): void // no-op (互換用)
 }
 
 class RecipeIO <<utility>> {
@@ -229,10 +230,15 @@ class WebPageFetcher <<utility>> {
 
 class YoutubeMetadataFetcher <<utility>> {
     + {static} fetchSummary(url: String): String
+    + {static} fetchSummary(url, ingredientNames): String
     - {static} extractVideoId(url: String): String
     - {static} fetchTitle(videoUrl: String): String
-    - {static} fetchTranscript(videoId: String): String
+    - {static} extractDescription(html: String): String
+    - {static} extractTranscript(html: String): String
     - {static} parseTranscriptXml(xml: String): String
+    - {static} stripUrls(s: String): String
+    - {static} containsAnyIngredient(text, names): boolean
+    - {static} httpGet(url, accept): String
 }
 
 class WhisperTranscriber <<utility>> {
@@ -296,6 +302,9 @@ class RecipeAIService {
     + setConfig(provider, apiKey, modelName): void
     + suggestRecipe(url, allIngredients): String[]
     + getModelsForProvider(provider): String[]
+    + fetchModelsForProvider(provider, apiKey): String[]
+    - {static} createProvider(provider, modelName): AbstractRecipeAIProvider
+    - {static} ollamaProviderForModel(modelName): OllamaProvider
 }
 
 enum "RecipeAIService.Provider" as Provider {
@@ -308,35 +317,55 @@ enum "RecipeAIService.Provider" as Provider {
 abstract class AbstractRecipeAIProvider {
     + {abstract} generateRecipe(apiKey, modelName, url, ings): String[]
     + {abstract} getAvailableModels(): String[]
+    + fetchAvailableModels(apiKey: String): String[]
     # buildPrompt(url, allIngredients): String
     # parseJsonResponse(escapedJson: String): String[]
+    # extractAndParse(jsonRes: String, contentKey: String): String[]
     # stripBrackets(s: String): String
+    # {static} readStream(stream: InputStream): String
     # {static} findUnescapedQuote(s, pos): int
     # {static} jsonEscape(s: String): String
     # {static} jsonUnescape(s: String): String
+    # {static} extractAllJsonStrings(json: String, key: String): List<String>
     - extractJsonString(text, key, fallback): String
     - extractJsonStringArray(text, key): String[]
 }
 
+note right of AbstractRecipeAIProvider
+  4プロバイダー共通の処理を集約:
+  - readStream / extractAndParse は
+    レスポンスJSONからモデル出力を抽出
+  - fetchAvailableModels は静的フォールバック
+  - GET /models 対応プロバイダーは override
+end note
+
 class OpenAIProvider {
     + generateRecipe(...): String[]
     + getAvailableModels(): String[]
+    + fetchAvailableModels(apiKey): String[]
+    - {static} isChatModel(id: String): boolean
 }
 
 class GeminiProvider {
     + generateRecipe(...): String[]
     + getAvailableModels(): String[]
+    + fetchAvailableModels(apiKey): String[]
     - postWithRetry(url, json): String
+    ~ {static} canonicalYoutubeUrl(url: String): String
+    - {static} extractYoutubeVideoId(url: String): String
 }
 
 class ClaudeProvider {
     + generateRecipe(...): String[]
     + getAvailableModels(): String[]
+    + fetchAvailableModels(apiKey): String[]
 }
 
 abstract class OllamaProvider {
     # {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
+    # {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
     + generateRecipe(apiKey, modelName, url, ings): String[]
+    + fetchAvailableModels(apiKey): String[]
 }
 
 note right of OllamaProvider

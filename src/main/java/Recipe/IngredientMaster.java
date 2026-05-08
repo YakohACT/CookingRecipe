@@ -3,6 +3,7 @@ package main.java.Recipe;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,24 +35,39 @@ public class IngredientMaster {
      */
     private void loadCsv() {
         File file = locateCsv();
-        if (file == null) return;
+        if (file == null) {
+            System.err.println("[IngredientMaster] database.csv \u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002\u98DF\u6750\u30EA\u30B9\u30C8\u306F\u7A7A\u306E\u307E\u307E\u8D77\u52D5\u3057\u307E\u3059\u3002");
+            return;
+        }
 
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            int lineNo = 0;
             String line;
             while ((line = br.readLine()) != null) {
+                lineNo++;
                 line = line.replace("\uFEFF", "").trim();
                 if (line.isEmpty()) continue;
                 String[] data = line.split(",");
-                if (data.length >= 2) {
-                    try {
-                        String catStr = data[0].trim();
-                        IngredientCategory cat = IngredientCategory.valueOf(catStr);
-                        String name = data[1].trim();
-                        database.put(new Ingredient(name, cat), name);
-                    } catch (Exception e) {}
+                if (data.length < 2) {
+                    System.err.println("[IngredientMaster] " + file.getName() + ":" + lineNo
+                            + " \u5217\u304C\u4E0D\u8DB3\u3057\u3066\u3044\u308B\u305F\u3081\u30B9\u30AD\u30C3\u30D7: " + line);
+                    continue;
                 }
+                String catStr = data[0].trim();
+                String name = data[1].trim();
+                IngredientCategory cat;
+                try {
+                    cat = IngredientCategory.valueOf(catStr);
+                } catch (IllegalArgumentException e) {
+                    System.err.println("[IngredientMaster] " + file.getName() + ":" + lineNo
+                            + " \u672A\u77E5\u306E\u30AB\u30C6\u30B4\u30EA '" + catStr + "' \u306E\u305F\u3081\u30B9\u30AD\u30C3\u30D7");
+                    continue;
+                }
+                database.put(new Ingredient(name, cat), name);
             }
-        } catch (Exception e) {}
+        } catch (IOException e) {
+            System.err.println("[IngredientMaster] CSV\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557: " + e.getMessage());
+        }
     }
 
     /**

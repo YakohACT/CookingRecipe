@@ -2,6 +2,11 @@ package main.java.AI;
 
 import main.java.Recipe.Ingredient;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
@@ -295,5 +300,50 @@ public abstract class AbstractRecipeAIProvider {
         return s.replaceAll("[\\[\\]【】「」]", "")
                 .replaceAll("^[\\s\\-*\\u30FB・]+", "")
                 .trim();
+    }
+
+    /**
+     * InputStream を UTF-8 文字列として読み切る。
+     * 各プロバイダーが個別実装していたものを共通化したヘルパー。
+     * @param stream 入力ストリーム(null可)
+     * @return ストリーム内容の文字列(null入力時は空文字)
+     * @throws IOException 読み込み失敗時
+     */
+    protected static String readStream(InputStream stream) throws IOException {
+        if (stream == null) return "";
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * APIレスポンス全体から指定キーの文字列値を抜き出し、JSON文字列として
+     * {@link #parseJsonResponse(String)} に渡してパースする共通ヘルパー。
+     * OpenAI/Claude/Ollama のレスポンスはそれぞれ "content" / "text" フィールドに
+     * モデルが返したJSONが文字列としてエスケープされて入っているため、同じロジックで処理可能。
+     * @param jsonRes      APIレスポンス全体のJSON文字列
+     * @param contentKey   抜き出す対象キー名(例: "content", "text")
+     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @throws Exception キーが見つからない/値の境界が壊れている場合
+     */
+    protected String[] extractAndParse(String jsonRes, String contentKey) throws Exception {
+        String quotedKey = "\"" + contentKey + "\":";
+        int keyIdx = jsonRes.indexOf(quotedKey);
+        if (keyIdx == -1) {
+            throw new Exception("レスポンス解析失敗: " + contentKey + "フィールドが見つかりません。レスポンス: " + jsonRes);
+        }
+        int valueQuote = jsonRes.indexOf("\"", keyIdx + quotedKey.length());
+        if (valueQuote == -1) {
+            throw new Exception("レスポンス解析失敗: " + contentKey + "フィールドの値が見つかりません");
+        }
+        int start = valueQuote + 1;
+        int end = findUnescapedQuote(jsonRes, start);
+        if (end == -1) {
+            throw new Exception("レスポンス解析失敗: " + contentKey + "フィールドの終端が見つかりません");
+        }
+        return parseJsonResponse(jsonRes.substring(start, end));
     }
 }

@@ -15,7 +15,6 @@
 
 ## 前提条件
 - Windows または MacOS またはLinux OS
-  (Whisperは現状Windowsのみ対応)
 - JDK17以降
 - Ollama
 - Ollamaの対応済みプロバイダ
@@ -54,7 +53,8 @@ scripts/
 └── unix/       macOS / Linux 用 (.command)
     ├── run.command
     ├── run-debug.command
-    └── build.command
+    ├── build.command
+    └── setup-whisper.command
 ```
 
 #### Windows
@@ -86,14 +86,14 @@ Finder で `scripts/unix/run.command` をダブルクリックすると Terminal
 ```
 GNOME / KDE 等では「実行可能なファイルとして開く」設定にすればダブルクリック起動も可能です。
 
-| ファイル                                | 用途                                   |
-|-------------------------------------|--------------------------------------|
-| **`scripts/unix/run.command`**          | アプリをバックグラウンド起動。初回はビルドも実行             |
-| **`scripts/unix/run-debug.command`**    | ターミナル付きで起動。stdout/stderrが見える(エラー調査用) |
-| **`scripts/unix/build.command`**        | コンパイルして RecipeManager.jar を生成        |
+| ファイル                                       | 用途                                                       |
+|--------------------------------------------|----------------------------------------------------------|
+| **`scripts/unix/run.command`**             | アプリをバックグラウンド起動。初回はビルドも実行                                 |
+| **`scripts/unix/run-debug.command`**       | ターミナル付きで起動。stdout/stderrが見える(エラー調査用)                     |
+| **`scripts/unix/build.command`**           | コンパイルして RecipeManager.jar を生成                            |
+| **`scripts/unix/setup-whisper.command`**   | Whisper, yt-dlp, ffmpeg を導入(macOS は brew、Linux は手順表示) |
 
 > ファイルが実行可能でない場合は `chmod +x scripts/unix/*.command` で権限を付与してください。
-> Whisper のセットアップスクリプトは現状 Windows 用のみ提供しています。
 
 #### Maven 対応IDE 
 pom.xml の依存を解決して `main.java.SwingMain` を Run。`lib/` の jar はリポジトリから自動取得されます。
@@ -191,6 +191,15 @@ Youtube動画はタイトルと字幕と概要欄を利用します。\
 - GeminiはYoutubeを分析する機能があるため、Whisperを導入する必要がないです。**なんなら容量の無駄遣いになります。**
 - Gemini以外は概要欄に材料が記載されていれば概要欄を利用し、なければ字幕を利用、字幕もなければWhisperで字幕を生成し、それを利用します。\
 なおWhisperを利用した場合の動作は不安定のため、 **Geminiを推奨** します。
+
+#### Whisper のセットアップ
+| OS      | 方法                                                                                                                                            |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| Windows | `scripts/windows/setup-whisper.bat` をダブルクリック (yt-dlp / ffmpeg / whisper.cpp / モデルを `lib/tools/`, `lib/models/` に配置)                              |
+| macOS   | `scripts/unix/setup-whisper.command` を実行 (Homebrew で `yt-dlp` / `ffmpeg` / `whisper-cpp` を導入し、モデルだけ `lib/models/` に取得)                            |
+| Linux   | `scripts/unix/setup-whisper.command` がパッケージ管理コマンドの案内を表示。`yt-dlp` / `ffmpeg` / `whisper-cli` を PATH に通したうえで、モデル `lib/models/ggml-base.bin` だけ取得すれば動作します。 |
+
+UNIX 環境では `lib/tools/` にバイナリがなくても、PATH 上の `yt-dlp` / `ffmpeg` / `whisper-cli`(または `whisper-cpp`)を自動検出します。
 ---
 ## ライセンス
 ### 同梱しているサードパーティライブラリ(`lib`ディレクトリ内)
@@ -215,5 +224,4 @@ Youtube動画はタイトルと字幕と概要欄を利用します。\
 
 #### 今後の予定
 
-- Whisperをはやくlinuxに対応させたい
 - AndroidとかiOSとかで動かしたい

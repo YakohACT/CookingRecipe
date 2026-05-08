@@ -2,12 +2,10 @@ package main.java.AI;
 
 import main.java.Recipe.Ingredient;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
@@ -54,21 +52,13 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
                 + "}";
 
         String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
-                + ":generateContent?key=" + cleanKey;
+                + ":generateContent?key=" + URLEncoder.encode(cleanKey, StandardCharsets.UTF_8);
         String json = "{\"contents\":[{\"parts\":[" + partsJson + "]}]," + generationConfig + "}";
 
         String jsonRes = postWithRetry(urlStr, json);
 
-        // candidates[0].content.parts[0].text からJSON文字列を抜き出す
-        int keyIdx = jsonRes.indexOf("\"text\":");
-        if (keyIdx == -1) throw new Exception("レスポンス解析失敗: textフィールドが見つかりません。レスポンス: " + jsonRes);
-        int valueQuote = jsonRes.indexOf("\"", keyIdx + 7);
-        if (valueQuote == -1) throw new Exception("レスポンス解析失敗: textフィールドの値が見つかりません。レスポンス: " + jsonRes);
-        int start = valueQuote + 1;
-        int end = findUnescapedQuote(jsonRes, start);
-        if (end == -1) throw new Exception("レスポンス解析失敗: textフィールドの終端が見つかりません");
-
-        return parseJsonResponse(jsonRes.substring(start, end));
+        // candidates[0].content.parts[0].text からモデルが返したJSON文字列を抽出してパース
+        return extractAndParse(jsonRes, "text");
     }
 
     /**
@@ -85,6 +75,8 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
             HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(60000);
             conn.setDoOutput(true);
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(json.getBytes(StandardCharsets.UTF_8));
@@ -144,22 +136,6 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     }
 
     /**
-     * InputStream を UTF-8 文字列として読み切る。
-     * @param stream 入力ストリーム(null可)
-     * @return ストリーム内容の文字列(null入力時は空文字)
-     * @throws Exception 読み込み失敗時
-     */
-    private String readStream(InputStream stream) throws Exception {
-        if (stream == null) return "";
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-        }
-        return sb.toString();
-    }
-
-    /**
      * /v1beta/models?key=KEY を叩いて利用可能なモデル名を動的取得する。
      * `models/` プレフィックスを除去し、`gemini-` 系のみに絞り込む。
      * 失敗時は静的フォールバック ({@link #getAvailableModels()}) を返す。
@@ -171,7 +147,7 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
         try {
             String url = "https://generativelanguage.googleapis.com/v1beta/models?key="
-                    + java.net.URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8);
+                    + URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8);
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(5000);

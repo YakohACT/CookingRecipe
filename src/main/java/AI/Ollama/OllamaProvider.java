@@ -3,10 +3,6 @@ package main.java.AI.Ollama;
 import main.java.AI.AbstractRecipeAIProvider;
 import main.java.Recipe.Ingredient;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
@@ -95,38 +91,8 @@ public abstract class OllamaProvider extends AbstractRecipeAIProvider {
                     + "\n(モデル '" + modelName + "' が `ollama pull` 済みかも確認してください)");
         }
 
-        String jsonRes = readStream(conn.getInputStream());
-
         // Ollama レスポンス形式: {"message": {"role":"assistant","content":"..."}, "done": true, ...}
         // content フィールドの中身がモデルの返したJSON文字列
-        int keyIdx = jsonRes.indexOf("\"content\":");
-        if (keyIdx == -1) {
-            throw new Exception("レスポンス解析失敗: contentフィールドが見つかりません。レスポンス: " + jsonRes);
-        }
-        int valueQuote = jsonRes.indexOf("\"", keyIdx + 10);
-        if (valueQuote == -1) {
-            throw new Exception("レスポンス解析失敗: contentフィールドの値が見つかりません");
-        }
-        int start = valueQuote + 1;
-        int end = findUnescapedQuote(jsonRes, start);
-        if (end == -1) throw new Exception("レスポンス解析失敗: contentフィールドの終端が見つかりません");
-
-        return parseJsonResponse(jsonRes.substring(start, end));
-    }
-
-    /**
-     * InputStream を UTF-8 文字列として読み切る。
-     * @param stream 入力ストリーム(null可)
-     * @return ストリーム内容の文字列(null入力時は空文字)
-     * @throws IOException 読み込み失敗時
-     */
-    private String readStream(InputStream stream) throws IOException {
-        if (stream == null) return "";
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-        }
-        return sb.toString();
+        return extractAndParse(readStream(conn.getInputStream()), "content");
     }
 }

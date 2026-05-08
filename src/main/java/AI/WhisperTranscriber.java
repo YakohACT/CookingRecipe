@@ -1,9 +1,7 @@
 package main.java.AI;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,13 +12,17 @@ import java.util.concurrent.TimeUnit;
 /**
  * YouTube に字幕が無い場合のフォールバック転写。
  * yt-dlp で音声を 16kHz/mono WAV に抽出し、whisper.cpp(whisper-cli)で文字起こしする。
- * 必要な実行ファイル一式は setup-whisper.bat で取得する想定。
  *
- * 配置:
- *   lib/tools/yt-dlp.exe
- *   lib/tools/ffmpeg.exe
- *   lib/tools/whisper-cli.exe   (または main.exe)
- *   lib/models/ggml-base.bin    (14M〜の各サイズに差替可)
+ * バイナリ探索順:
+ *   1. lib/tools/ 配下に同梱された実行ファイル(Windowsは `xxx.exe`、UNIXは `xxx`)
+ *   2. UNIX のみ: 環境変数 PATH(homebrew / apt 等で入れたシステム実行ファイル)
+ *
+ * 配置例:
+ *   Windows  : lib/tools/yt-dlp.exe, ffmpeg.exe, whisper-cli.exe (setup-whisper.bat で取得)
+ *   macOS/Linux: lib/tools/yt-dlp, ffmpeg, whisper-cli (setup-whisper.command で取得)
+ *               または brew/apt で入れた /usr/local/bin/yt-dlp 等を自動検出
+ *
+ * モデルは lib/models/ggml-base.bin (Windows/UNIX 共通)。
  */
 public final class WhisperTranscriber {
 
@@ -30,12 +32,29 @@ public final class WhisperTranscriber {
     private WhisperTranscriber() {}
 
     /**
+     * 現在のOSがWindowsかどうか。実行ファイル名の拡張子と環境変数キーの差異判定に使う。
+     * @return Windows系OSなら true
+     */
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    /**
+     * プラットフォームごとの実行ファイル名を返す(Windowsだけ ".exe" を付与)。
+     * @param baseName 拡張子なしのベース名(例: "yt-dlp")
+     * @return 検索すべき実行ファイル名(例: Windowsなら "yt-dlp.exe")
+     */
+    private static String executableName(String baseName) {
+        return isWindows() ? baseName + ".exe" : baseName;
+    }
+
+    /**
      * Whisper パイプラインの全構成要素が揃っているかを返す。
      * @return yt-dlp / ffmpeg / whisper-cli / モデルが全て見つかれば true
      */
     public static boolean isAvailable() {
-        return locateTool("yt-dlp.exe") != null
-                && locateTool("ffmpeg.exe") != null
+        return locateTool("yt-dlp") != null
+                && locateTool("ffmpeg") != null
                 && locateWhisperCli() != null
                 && locateModel() != null;
     }
@@ -48,13 +67,15 @@ public final class WhisperTranscriber {
      */
     public static String transcribe(String youtubeUrl) {
         if (!isAvailable()) {
-            System.err.println("[WhisperTranscriber] パイプライン未セットアップ: setup-whisper.bat を実行してください");
+            System.err.println("[WhisperTranscriber] パイプライン未セットアップ: "
+                    + (isWindows() ? "setup-whisper.bat" : "scripts/unix/setup-whisper.command")
+                    + " を実行するか、yt-dlp / ffmpeg / whisper-cli を PATH に通してください");
             return "";
         }
         if (youtubeUrl == null || youtubeUrl.trim().isEmpty()) return "";
 
-        Path ytDlp       = locateTool("yt-dlp.exe");
-        Path ffmpegExe   = locateTool("ffmpeg.exe");
+        Path ytDlp       = locateTool("yt-dlp");
+        Path ffmpegExe   = locateTool("ffmpeg");
         Path whisperCli  = locateWhisperCli();
         Path modelFile   = locateModel();
         Path toolsDir    = ytDlp.getParent();
@@ -107,8 +128,7 @@ public final class WhisperTranscriber {
                 return "";
             }
 
-            String text = Files.readString(outTxt, StandardCharsets.UTF_8).trim();
-            return text;
+            return Files.readString(outTxt, StandardCharsets.UTF_8).trim();
         } catch (Exception e) {
             System.err.println("[WhisperTranscriber] 例外: " + e.getMessage());
             return "";
@@ -128,10 +148,12 @@ public final class WhisperTranscriber {
     private static int runProcess(Path workingDir, long timeoutSec, String... command) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workingDir.toFile());
-        // PATH を先頭に追加して、yt-dlp が ffmpeg を発見できるようにする
+        // PATH を先頭に追加して、yt-dlp が ffmpeg を発見できるようにする。
+        // Windowsは "Path"(case-insensitive)、UNIX は "PATH"(case-sensitive) を使う必要がある。
         Map<String, String> env = pb.environment();
-        String oldPath = env.getOrDefault("Path", env.getOrDefault("PATH", ""));
-        env.put("Path", workingDir.toString() + File.pathSeparator + oldPath);
+        String pathKey = isWindows() ? "Path" : "PATH";
+        String oldPath = env.getOrDefault(pathKey, env.getOrDefault("PATH", ""));
+        env.put(pathKey, workingDir.toString() + File.pathSeparator + oldPath);
         // 標準出力は破棄。標準エラーは inherit してデバッグ実行時に見えるように
         pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         pb.redirectError(ProcessBuilder.Redirect.INHERIT);
@@ -148,25 +170,71 @@ public final class WhisperTranscriber {
     // ---- 配置検出 ----------------------------------------------------------
 
     /**
-     * lib/tools/ の候補ディレクトリを探索して指定ファイル名の絶対パスを返す。
-     * @param exeName 探したい実行ファイル名(例: "yt-dlp.exe")
+     * 実行ファイルを次の順で探す:
+     *   1. lib/tools/ 配下の候補ディレクトリ(Windowsは ".exe" 付き、UNIX は拡張子なし)
+     *   2. UNIX のみ: 環境変数 PATH 内のディレクトリ
+     * @param baseName 拡張子なしのベース名(例: "yt-dlp")
      * @return 見つかった Path。見つからなければ null
      */
-    private static Path locateTool(String exeName) {
+    private static Path locateTool(String baseName) {
+        String exeName = executableName(baseName);
+        // 1. 同梱バイナリ
         for (Path base : toolsDirCandidates()) {
             Path p = base.resolve(exeName);
             if (Files.exists(p)) return p.toAbsolutePath();
+        }
+        // 2. UNIX のみシステム PATH もフォールバックとして検索(brew/apt インストール対応)
+        if (!isWindows()) {
+            Path fromPath = findOnSystemPath(exeName);
+            if (fromPath != null) return fromPath;
         }
         return null;
     }
 
     /**
-     * whisper-cli.exe または(古いビルドの)main.exe を探す。
+     * 環境変数 PATH を順に走査し、実行可能ファイルを返す(UNIX用)。
+     * @param exeName 検索する実行ファイル名(プラットフォーム拡張子込み)
+     * @return 見つかった Path。見つからなければ null
+     */
+    private static Path findOnSystemPath(String exeName) {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isEmpty()) return null;
+        for (String dir : pathEnv.split(File.pathSeparator)) {
+            if (dir.isEmpty()) continue;
+            Path p = Paths.get(dir, exeName);
+            if (Files.exists(p) && Files.isExecutable(p)) return p.toAbsolutePath();
+        }
+        return null;
+    }
+
+    /**
+     * whisper-cli を探す。バイナリ名のバリエーション(whisper-cli / whisper-cpp / 旧main)に対応。
      * @return 見つかった Path。見つからなければ null
      */
     private static Path locateWhisperCli() {
-        Path p = locateTool("whisper-cli.exe");
-        return (p != null) ? p : locateTool("main.exe");
+        Path p = locateTool("whisper-cli");
+        if (p != null) return p;
+        // Homebrew whisper-cpp フォーミュラなど別名で入る場合がある
+        p = locateTool("whisper-cpp");
+        if (p != null) return p;
+        // 古い whisper.cpp ビルドの "main" バイナリ。lib/tools/ のみ対象
+        // (UNIXの PATH 上の "main" は別物の可能性が高いので意図的に検索しない)
+        return locateBundledTool("main");
+    }
+
+    /**
+     * 同梱バイナリ(lib/tools/)のみを探す(PATHは見ない)。
+     * 名前が汎用的なバイナリ("main"等)で誤検出を避けたいときに使う。
+     * @param baseName ベース名
+     * @return 見つかった Path。見つからなければ null
+     */
+    private static Path locateBundledTool(String baseName) {
+        String exeName = executableName(baseName);
+        for (Path base : toolsDirCandidates()) {
+            Path p = base.resolve(exeName);
+            if (Files.exists(p)) return p.toAbsolutePath();
+        }
+        return null;
     }
 
     /**

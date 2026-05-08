@@ -34,17 +34,6 @@ public class Recipe {
     }
 
     /**
-     * カテゴリー未指定時のフォールバックを許容する旧形式コンストラクタ。
-     * 内部でカテゴリーを {@link RecipeCategory#OTHER} に固定する。
-     * @param title       レシピ名
-     * @param url         参照URL
-     * @param ingredients 使用食材のリスト
-     */
-    public Recipe(String title, String url, ArrayList<Ingredient> ingredients) {
-        this(title, url, ingredients, EnumSet.of(RecipeCategory.OTHER));
-    }
-
-    /**
      * DB主キーを返す。
      * @return DB上のID。未永続化レシピでは 0
      */

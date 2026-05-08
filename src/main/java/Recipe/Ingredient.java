@@ -1,13 +1,12 @@
 package main.java.Recipe;
 
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * 食材データを管理するクラス
- * ファイル保存のため Serializable を実装
+ * 食材データを管理するクラス。
+ * 永続化は SQLite + database.csv 経由で行うため Java シリアライゼーションは不要。
  */
-public class Ingredient implements Serializable {
+public class Ingredient {
     private String name;
     private IngredientCategory category;
 
