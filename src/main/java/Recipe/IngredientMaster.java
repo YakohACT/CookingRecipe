@@ -112,6 +112,41 @@ public class IngredientMaster {
     }
 
     /**
+     * 食材一覧を一括置換する(順序・カテゴリの変更を反映)。
+     * メモリ上の database を引数のリストの内容で書き換え、database.csv 全体を書き直す。
+     * 順序はリストの順序がそのまま使われる。
+     * @param ordered 新しい食材一覧(順序を保持)
+     */
+    public void replaceAll(List<Ingredient> ordered) {
+        if (ordered == null) return;
+        database.clear();
+        for (Ingredient ing : ordered) {
+            if (ing == null || ing.getName() == null || ing.getName().isEmpty()) continue;
+            database.put(ing, ing.getName());
+        }
+        saveCsv();
+    }
+
+    /**
+     * 現在のメモリ上の食材一覧を database.csv に上書き保存する。
+     */
+    private void saveCsv() {
+        File csv = locateCsv();
+        if (csv == null) {
+            csv = new File("database.csv");
+        }
+        try {
+            List<String> lines = new ArrayList<>();
+            for (Ingredient ing : database.keySet()) {
+                lines.add(ing.getCategory().name() + "," + ing.getName());
+            }
+            Files.write(csv.toPath(), lines, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            System.err.println("[IngredientMaster] CSV保存に失敗: " + e.getMessage());
+        }
+    }
+
+    /**
      * 食材を OTHER カテゴリで追加する(同名の食材が既にあればそれを返す)。
      * メモリ上のマスタ・database.csv の両方に反映される。
      * @param name 食材名

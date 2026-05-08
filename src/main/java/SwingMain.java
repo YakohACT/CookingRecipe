@@ -7,6 +7,7 @@ import main.java.Recipe.AllRecipeList;
 import main.java.Recipe.IngredientMaster;
 import main.java.UI.DataIOPanel;
 import main.java.UI.DeleteRecipePanel;
+import main.java.UI.IngredientMasterPanel;
 import main.java.UI.RegisterRecipePanel;
 import main.java.UI.SettingsPanel;
 import main.java.UI.Theme;
@@ -114,6 +115,7 @@ public class SwingMain extends JFrame {
         addSideButton(sideMenu, "レシピ閲覧", e -> showPanel(new ViewRecipePanel(this)));
         addSideButton(sideMenu, "レシピ削除", e -> showPanel(new DeleteRecipePanel(this)));
         addSideButton(sideMenu, "AI設定",   e -> showPanel(new SettingsPanel(this)));
+        addSideButton(sideMenu, "食材管理", e -> showPanel(new IngredientMasterPanel(this)));
         addSideButton(sideMenu, "データ入出力", e -> showPanel(new DataIOPanel(this)));
 
         sideMenu.add(Box.createVerticalGlue());

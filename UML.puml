@@ -67,6 +67,23 @@ class DataIOPanel {
     - wrapText(text): JComponent
 }
 
+class IngredientMasterPanel {
+    - owner: SwingMain
+    - model: DefaultTableModel
+    - table: JTable
+    - moveSelected(delta: int): void
+    - swapRows(a: int, b: int): void
+    - refreshRowNumbers(): void
+    - save(): void
+}
+
+note right of IngredientMasterPanel
+  食材一覧をJTableで閲覧・編集。
+  カテゴリーをコンボで変更でき、
+  ↑/↓で並び順を入れ替えできる。
+  保存で database.csv に書き戻す
+end note
+
 class SettingsPanel {
     - updateModelCombo(providerCombo, modelCombo): void
 }
@@ -147,10 +164,16 @@ class Recipe {
 }
 
 class IngredientMaster {
-    - database: HashMap<Ingredient, String>
+    - database: LinkedHashMap<Ingredient, String>
     - loadCsv(): void
+    - locateCsv(): File
+    - saveCsv(): void
+    - appendToCsv(category, name): void
     + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
     + getAllIngredients(): ArrayList<Ingredient>
+    + addIngredient(name: String): Ingredient
+    + addIngredient(name, category): Ingredient
+    + replaceAll(ordered: List<Ingredient>): void
 }
 
 class AllRecipeList {
@@ -342,11 +365,14 @@ class QwenProvider {
 ' --- UI層 ---
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
-SwingMain o--> RegisterRecipePanel : creates >
-SwingMain o--> ViewRecipePanel    : creates >
-SwingMain o--> DeleteRecipePanel  : creates >
-SwingMain o--> SettingsPanel      : creates >
-SwingMain o--> DataIOPanel        : creates >
+SwingMain o--> RegisterRecipePanel    : creates >
+SwingMain o--> ViewRecipePanel        : creates >
+SwingMain o--> DeleteRecipePanel      : creates >
+SwingMain o--> SettingsPanel          : creates >
+SwingMain o--> DataIOPanel            : creates >
+SwingMain o--> IngredientMasterPanel  : creates >
+IngredientMasterPanel ..> SwingMain
+IngredientMasterPanel ..> IngredientMaster : edits & persists
 DataIOPanel ..> SwingMain
 DataIOPanel ..> RecipeIO : uses
 DataIOPanel ..> UIComponents
