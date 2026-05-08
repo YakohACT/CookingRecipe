@@ -200,6 +200,7 @@ Youtube動画はタイトルと字幕と概要欄を利用します。\
 | Linux   | `scripts/unix/setup-whisper.command` がパッケージ管理コマンドの案内を表示。`yt-dlp` / `ffmpeg` / `whisper-cli` を PATH に通したうえで、モデル `lib/models/ggml-base.bin` だけ取得すれば動作します。 |
 
 UNIX 環境では `lib/tools/` にバイナリがなくても、PATH 上の `yt-dlp` / `ffmpeg` / `whisper-cli`(または `whisper-cpp`)を自動検出します。
+
 ---
 ## ライセンス
 ### 同梱しているサードパーティライブラリ(`lib`ディレクトリ内)
