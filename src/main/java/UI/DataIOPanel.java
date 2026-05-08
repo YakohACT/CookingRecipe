@@ -252,10 +252,17 @@ public class DataIOPanel extends JPanel {
             @Override
             protected void process(List<BatchUrlImporter.Progress> chunks) {
                 BatchUrlImporter.Progress last = chunks.get(chunks.size() - 1);
-                bar.setValue(last.index + (last.lastSucceeded == null ? 0 : 1));
-                String stage = last.lastSucceeded == null
-                        ? "解析中"
-                        : (last.lastSucceeded ? "登録完了" : "失敗");
+                // 進捗バー: PROCESSING ならカレントの開始位置、それ以外(成功/失敗/スキップ)は1件分加算
+                int progressed = last.index + (last.status == BatchUrlImporter.Status.PROCESSING ? 0 : 1);
+                bar.setValue(progressed);
+                String stage;
+                switch (last.status) {
+                    case PROCESSING:        stage = "解析中"; break;
+                    case SUCCEEDED:         stage = "登録完了"; break;
+                    case SKIPPED_DUPLICATE: stage = "スキップ(URL重複)"; break;
+                    case FAILED:
+                    default:                stage = "失敗"; break;
+                }
                 statusLabel.setText("[" + (last.index + 1) + "/" + last.total + "] " + stage + ": " + last.url);
             }
 
@@ -266,10 +273,12 @@ public class DataIOPanel extends JPanel {
                 try {
                     r = get();
                 } catch (Exception ignore) {
-                    r = new BatchUrlImporter.Result(0, 0, 0);
+                    r = new BatchUrlImporter.Result(0, 0, 0, 0);
                 }
                 String msg = (cancelled[0] ? "キャンセルされました。\n" : "一括登録が完了しました。\n")
-                        + "成功: " + r.succeeded + "件\n失敗: " + r.failed + "件";
+                        + "成功: " + r.succeeded + "件\n"
+                        + "失敗: " + r.failed + "件\n"
+                        + "スキップ(URL重複): " + r.skipped + "件";
                 JOptionPane.showMessageDialog(DataIOPanel.this, msg, "結果",
                         JOptionPane.INFORMATION_MESSAGE);
                 owner.showWelcome();
