@@ -1,6 +1,8 @@
 package main.java.UI;
 
 import main.java.SwingMain;
+import main.java.AI.RecipeAIService;
+import main.java.Recipe.BatchUrlImporter;
 import main.java.Recipe.Recipe;
 import main.java.Recipe.RecipeIO;
 
@@ -65,6 +67,23 @@ public class DataIOPanel extends JPanel {
 
         form.add(Box.createRigidArea(new Dimension(0, 32)));
 
+        // ===== URLバッチ取込み (AI) =====
+        JLabel batchHeader = new JLabel("URLバッチ取込み (AI)");
+        batchHeader.setFont(Theme.FONT_TITLE.deriveFont(15f));
+        UIComponents.addLeftAligned(form, batchHeader);
+        UIComponents.addLeftAligned(form, wrapText(
+                "1行に1つの URL を記述したテキスト(.txt)ファイルを選び、各 URL を"
+                + " 現在選択中の AI プロバイダー(設定画面で選択中のもの)で順次解析して"
+                + " 一括登録します。空行と <code>#</code> から始まるコメント行は無視されます。"
+                + " カテゴリーは「その他」固定で登録されるため、必要に応じて後で編集してください。"));
+        form.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        JButton btnBatch = UIComponents.createPrimaryButton("URLリストから一括登録…");
+        btnBatch.addActionListener(e -> doBatchUrlImport(owner));
+        UIComponents.addLeftAligned(form, btnBatch);
+
+        form.add(Box.createRigidArea(new Dimension(0, 32)));
+
         // ===== 現状サマリー =====
         int count = owner.getAllRecipeList().getRecipeList().size();
         JLabel summary = new JLabel("現在登録されているレシピ: " + count + "件");
@@ -126,6 +145,145 @@ public class DataIOPanel extends JPanel {
                     "エラー", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
         }
+    }
+
+    /**
+     * URLバッチ取込み: テキストファイル選択 → 各URLをAIに解析させて順次登録。
+     * AI呼び出しは時間がかかるためモーダル進捗ダイアログを表示し、キャンセル可能にする。
+     * @param owner 共有状態を持つフレーム
+     */
+    private void doBatchUrlImport(SwingMain owner) {
+        // 1. AI 設定チェック (Ollama 以外は APIキー必須)
+        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
+                && owner.getCurrentApiKey().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
+                    "AI未設定", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // 2. ファイル選択
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("URLリストの.txtファイルを選択");
+        chooser.setFileFilter(new FileNameExtensionFilter("テキストファイル (*.txt)", "txt"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        File file = chooser.getSelectedFile();
+
+        // 3. URL 読み込み
+        final List<String> urls;
+        try {
+            urls = BatchUrlImporter.readUrls(file.toPath());
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "ファイル読み込みに失敗しました: " + ex.getMessage(),
+                    "エラー", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (urls.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "ファイル内に有効なURLが見つかりませんでした。",
+                    "情報", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 4. 確認
+        int confirm = JOptionPane.showConfirmDialog(this,
+                urls.size() + " 件のURLをAIで解析して一括登録します。\n"
+                + "(1件あたり10〜60秒程度かかります)\n\n続行しますか？",
+                "一括登録の確認", JOptionPane.OK_CANCEL_OPTION);
+        if (confirm != JOptionPane.OK_OPTION) return;
+
+        // 5. 進捗ダイアログ + バックグラウンド処理
+        runBatchImport(owner, urls);
+    }
+
+    /**
+     * モーダル進捗ダイアログを表示しつつ {@link BatchUrlImporter#importAll} を実行する。
+     * @param owner 共有状態
+     * @param urls  処理対象URLリスト
+     */
+    private void runBatchImport(SwingMain owner, List<String> urls) {
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(parent, "AIで一括登録中…", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+        JLabel statusLabel = new JLabel("準備中...");
+        statusLabel.setFont(Theme.FONT_MAIN);
+        JProgressBar bar = new JProgressBar(0, urls.size());
+        bar.setStringPainted(true);
+        JButton cancelBtn = new JButton("キャンセル");
+
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(new EmptyBorder(20, 24, 20, 24));
+        UIComponents.addLeftAligned(content, statusLabel);
+        content.add(Box.createRigidArea(new Dimension(0, 12)));
+        bar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(bar);
+        content.add(Box.createRigidArea(new Dimension(0, 16)));
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnRow.setOpaque(false);
+        btnRow.add(cancelBtn);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(btnRow);
+        dialog.setContentPane(content);
+        dialog.pack();
+        dialog.setSize(Math.max(480, dialog.getWidth()), dialog.getHeight());
+        dialog.setLocationRelativeTo(this);
+
+        // ユーザーがキャンセルしたかを SwingWorker / バックグラウンド側に伝えるフラグ
+        final boolean[] cancelled = {false};
+
+        SwingWorker<BatchUrlImporter.Result, BatchUrlImporter.Progress> worker = new SwingWorker<>() {
+            @Override
+            protected BatchUrlImporter.Result doInBackground() {
+                RecipeAIService aiService = new RecipeAIService();
+                aiService.setConfig(owner.getCurrentAiProvider(),
+                        owner.getCurrentApiKey(),
+                        owner.getCurrentModelName());
+                return BatchUrlImporter.importAll(urls,
+                        aiService,
+                        owner.getIngredientMaster(),
+                        owner.getAllRecipeList(),
+                        this::publish,
+                        () -> cancelled[0]);
+            }
+
+            @Override
+            protected void process(List<BatchUrlImporter.Progress> chunks) {
+                BatchUrlImporter.Progress last = chunks.get(chunks.size() - 1);
+                bar.setValue(last.index + (last.lastSucceeded == null ? 0 : 1));
+                String stage = last.lastSucceeded == null
+                        ? "解析中"
+                        : (last.lastSucceeded ? "登録完了" : "失敗");
+                statusLabel.setText("[" + (last.index + 1) + "/" + last.total + "] " + stage + ": " + last.url);
+            }
+
+            @Override
+            protected void done() {
+                dialog.dispose();
+                BatchUrlImporter.Result r;
+                try {
+                    r = get();
+                } catch (Exception ignore) {
+                    r = new BatchUrlImporter.Result(0, 0, 0);
+                }
+                String msg = (cancelled[0] ? "キャンセルされました。\n" : "一括登録が完了しました。\n")
+                        + "成功: " + r.succeeded + "件\n失敗: " + r.failed + "件";
+                JOptionPane.showMessageDialog(DataIOPanel.this, msg, "結果",
+                        JOptionPane.INFORMATION_MESSAGE);
+                owner.showWelcome();
+            }
+        };
+
+        cancelBtn.addActionListener(e -> {
+            cancelled[0] = true;
+            cancelBtn.setEnabled(false);
+            statusLabel.setText("キャンセル中... (現在のリクエスト完了を待機)");
+        });
+
+        worker.execute();
+        dialog.setVisible(true); // モーダル: dispose() されるまで EDT のサブイベントループで処理継続
     }
 
     /**
