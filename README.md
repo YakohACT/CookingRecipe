@@ -2,7 +2,7 @@
 　基本は全てmainと同じなのでそちらを参照に
  
 ## 追加機能
-<img width="669" height="201" alt="image" src="https://github.com/user-attachments/assets/567b4375-7d16-4385-aeb3-437401863915" />
+<img width="669" height="201" alt="image" src="https://github.com/user-attachments/assets/567b4375-7d16-4385-aeb3-437401863915" />\
 1個ずつURLを送るの面倒な方向けの機能！
 
 ## ライセンス
