@@ -23,3 +23,8 @@
 | [ffmpeg](https://ffmpeg.org/) (BtbN gpl ビルド) | **[GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html)** | `ffmpeg-master-latest-win64-gpl.zip` 利用 |
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | [MIT License](https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE) |                                         |
 | [ggml Whisper モデル](https://huggingface.co/ggerganov/whisper.cpp) | [MIT License](https://github.com/openai/whisper/blob/main/LICENSE) | OpenAI Whisper                          |
+
+
+
+
+
