@@ -17,7 +17,7 @@
 - Windows または MacOS またはLinux OS
 - JDK17以降
 - Ollama
-- Ollamaの対応済みプロバイダ
+- Ollamaの確認済みプロバイダ
   - gemma4:e2b
   - gemma4:e4b
   - llama3:8b
