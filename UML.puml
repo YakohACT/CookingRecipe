@@ -66,6 +66,8 @@ class DeleteRecipePanel {
 class DataIOPanel {
     - doExport(owner): void
     - doImport(owner): void
+    - doBatchUrlImport(owner): void
+    - runBatchImport(owner, urls): void
     - wrapText(text): JComponent
 }
 
@@ -199,6 +201,36 @@ note right of RecipeIO
   レシピの JSON 入出力を行う。
   バックアップや別端末への移行に利用
 end note
+
+class BatchUrlImporter <<utility>> {
+    + {static} readUrls(file: Path): List<String>
+    + {static} importAll(urls, aiService, master, recipeList, onProgress, cancelCheck): Result
+    - {static} buildRecipe(result, url, master): Recipe
+}
+
+class "BatchUrlImporter.Result" as BatchResult {
+    + succeeded: int
+    + failed: int
+    + total: int
+}
+
+class "BatchUrlImporter.Progress" as BatchProgress {
+    + index: int
+    + total: int
+    + url: String
+    + lastSucceeded: Boolean
+}
+
+note right of BatchUrlImporter
+  1行1URLのテキストから AI で順次解析→
+  AllRecipeList へ登録するバッチ処理。
+  進捗コールバックとキャンセル要求を受け付け、
+  Swing 側は SwingWorker で非同期実行する。
+  カテゴリーは OTHER 固定。
+end note
+
+BatchUrlImporter +-- BatchResult
+BatchUrlImporter +-- BatchProgress
 
 ' ===== 永続化層 =====
 class RecipeRepository {
@@ -404,7 +436,12 @@ IngredientMasterPanel ..> SwingMain
 IngredientMasterPanel ..> IngredientMaster : edits & persists
 DataIOPanel ..> SwingMain
 DataIOPanel ..> RecipeIO : uses
+DataIOPanel ..> BatchUrlImporter : URL一括取込
+DataIOPanel ..> RecipeAIService  : 一括取込時に呼び出し
 DataIOPanel ..> UIComponents
+BatchUrlImporter ..> RecipeAIService
+BatchUrlImporter ..> IngredientMaster
+BatchUrlImporter ..> AllRecipeList
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 
 RegisterRecipePanel ..> SwingMain
