@@ -1,8 +1,12 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
-' ===== main.java.UI 層 =====
-class SwingMain {
+'  Recipe Manager Pro - 完全版クラス図 (private メンバーを含む全メンバー)
+'  ※ 実装(src/main/java 配下)と1:1で対応。
+'    匿名 SwingWorker / リスナー等のローカルクラスは図には含めない。
+
+' main.java.UI 層
+class SwingMain extends JFrame {
     - {static} PREFS: Preferences
     - {static} PREF_THEME: String
     - {static} FLATLAF_AVAILABLE: boolean
@@ -13,81 +17,84 @@ class SwingMain {
     - currentAiProvider: RecipeAIService.Provider
     - darkMode: boolean
     - themeButton: JButton
-    + showPanel(panel: JPanel): void
-    + showWelcome(): void
+    + SwingMain()
+    - buildSideMenu(): JPanel
+    - addSideButton(parent: JPanel, text: String, action: ActionListener): void
+    - createSideButton(text: String, action: ActionListener): JButton
+    - themeButtonLabel(): String
     + toggleTheme(): void
     - {static} applyTheme(dark: boolean): void
+    + showPanel(panel: JPanel): void
+    + showWelcome(): void
     + getAllRecipeList(): AllRecipeList
     + getIngredientMaster(): IngredientMaster
     + getCurrentAiProvider(): RecipeAIService.Provider
-    + setCurrentAiProvider(p): void
+    + setCurrentAiProvider(p: Provider): void
     + getCurrentApiKey(): String
-    + getApiKeyFor(p): String
-    + setApiKeyFor(p, plainKey): void
+    + getApiKeyFor(p: Provider): String
+    + setApiKeyFor(p: Provider, plainKey: String): void
     + getCurrentModelName(): String
-    + setCurrentModelName(m): void
-    + getModelFor(p): String
-    + setModelFor(p, model): void
+    + setCurrentModelName(m: String): void
+    + getModelFor(p: Provider): String
+    + setModelFor(p: Provider, model: String): void
     + {static} main(args: String[]): void
 }
 
-note right of SwingMain
-  FlatLaf (Light/Dark) を Preferences API
-  に永続化。サイドメニューの切替ボタンで
-  動的に L&F を入替える
-end note
-
-class RegisterRecipePanel {
+class RegisterRecipePanel extends JPanel {
     - owner: SwingMain
     - editTarget: Recipe
     - titleField: JTextField
     - urlField: JTextField
     - categoryList: JList<RecipeCategory>
     - selectedListModel: DefaultListModel<Ingredient>
-    + RegisterRecipePanel(owner)
-    + RegisterRecipePanel(owner, editTarget: Recipe)
+    + RegisterRecipePanel(owner: SwingMain)
+    + RegisterRecipePanel(owner: SwingMain, editTarget: Recipe)
     - prefillFromRecipe(r: Recipe): void
-    - requestAiSuggestion(btn: JButton): void
+    - buildHeader(btnAi: JButton): JPanel
+    - buildAiButton(): JButton
+    - requestAiSuggestion(btnAi: JButton): void
     - applyAiResult(result: String[]): boolean
     - submitRecipe(): void
 }
 
-class ViewRecipePanel {
+class ViewRecipePanel extends JPanel {
     - owner: SwingMain
+    + ViewRecipePanel(owner: SwingMain)
+    - detailWithEditButton(detail: JEditorPane, source: JList<Recipe>): JPanel
     - buildTitleTab(): JPanel
     - buildIngredientTab(): JPanel
     - buildCategoryTab(): JPanel
-    - detailWithEditButton(detail, source): JPanel
 }
 
-class DeleteRecipePanel {
+class DeleteRecipePanel extends JPanel {
+    + DeleteRecipePanel(owner: SwingMain)
 }
 
-class DataIOPanel {
-    - doExport(owner): void
-    - doImport(owner): void
-    - wrapText(text): JComponent
+class DataIOPanel extends JPanel {
+    + DataIOPanel(owner: SwingMain)
+    - wrapText(text: String): JComponent
+    - doExport(owner: SwingMain): void
+    - doBatchUrlImport(owner: SwingMain): void
+    - runBatchImport(owner: SwingMain, urls: List<String>): void
+    - doImport(owner: SwingMain): void
 }
 
-class IngredientMasterPanel {
+class IngredientMasterPanel extends JPanel {
+    - {static} COL_NO: int = 0
+    - {static} COL_CAT: int = 1
+    - {static} COL_NAME: int = 2
     - owner: SwingMain
     - model: DefaultTableModel
     - table: JTable
+    + IngredientMasterPanel(owner: SwingMain)
     - moveSelected(delta: int): void
     - swapRows(a: int, b: int): void
     - refreshRowNumbers(): void
     - save(): void
 }
 
-note right of IngredientMasterPanel
-  食材一覧をJTableで閲覧・編集。
-  カテゴリーをコンボで変更でき、
-  ↑/↓で並び順を入れ替えできる。
-  保存で database.csv に書き戻す
-end note
-
-class SettingsPanel {
-    - updateModelCombo(providerCombo, modelCombo): void
+class SettingsPanel extends JPanel {
+    + SettingsPanel(owner: SwingMain)
 }
 
 class Theme <<utility>> {
@@ -99,16 +106,21 @@ class Theme <<utility>> {
     + {static} COLOR_AI: Color
     + {static} FONT_MAIN: Font
     + {static} FONT_TITLE: Font
+    - Theme()
 }
 
 class UIComponents <<utility>> {
     + {static} createStyledTextField(): JTextField
     + {static} attachContextMenu(comp: JTextComponent): void
-    + {static} createStyledRecipeList(model): JList<Recipe>
+    + {static} createStyledRecipeList(model: DefaultListModel<Recipe>): JList<Recipe>
     + {static} createDetailArea(): JEditorPane
-    + {static} updateDetailArea(area, recipe): void
-    + {static} addLeftAligned(panel, comp): void
-    + {static} createPrimaryButton(text): JButton
+    + {static} updateDetailArea(area: JEditorPane, recipe: Recipe): void
+    - {static} escapeHtml(s: String): String
+    - {static} escapeAttr(s: String): String
+    - {static} toHex(c: Color): String
+    + {static} addLeftAligned(panel: JPanel, comp: JComponent): void
+    + {static} createPrimaryButton(text: String): JButton
+    - UIComponents()
 }
 
 ' ===== ドメイン層 =====
@@ -120,8 +132,8 @@ enum IngredientCategory {
     FRUIT
     MILK
     PICKLES
-    OTHER
     SEASONING
+    OTHER
 }
 
 enum RecipeCategory {
@@ -140,14 +152,19 @@ enum RecipeCategory {
     CHUKA
     SWEETS
     OTHER
+    --
+    - displayName: String
     + getDisplayName(): String
+    + toString(): String
 }
 
 class Ingredient {
     - name: String
     - category: IngredientCategory
+    + Ingredient(name: String, category: IngredientCategory)
     + getName(): String
     + getCategory(): IngredientCategory
+    + toString(): String
     + equals(o: Object): boolean
     + hashCode(): int
 }
@@ -158,6 +175,7 @@ class Recipe {
     - url: String
     - ingredients: ArrayList<Ingredient>
     - categories: EnumSet<RecipeCategory>
+    + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>, categories: EnumSet<RecipeCategory>)
     + getId(): long
     + setId(id: long): void
     + getTitle(): String
@@ -168,143 +186,193 @@ class Recipe {
 
 class IngredientMaster {
     - database: LinkedHashMap<Ingredient, String>
+    + IngredientMaster()
     - loadCsv(): void
     - locateCsv(): File
-    - saveCsv(): void
-    - appendToCsv(category, name): void
     + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
     + getAllIngredients(): ArrayList<Ingredient>
+    + replaceAll(ordered: List<Ingredient>): void
+    - saveCsv(): void
     + addIngredient(name: String): Ingredient
     + addIngredient(name: String, category: IngredientCategory): Ingredient
-    + replaceAll(ordered: List<Ingredient>): void
+    - appendToCsv(category: IngredientCategory, name: String): void
 }
 
 class AllRecipeList {
     - repository: RecipeRepository
     - recipeList: ArrayList<Recipe>
-    + addRecipe(recipe: Recipe): void
-    + updateRecipe(recipe: Recipe): void
-    + deleteRecipe(recipe: Recipe): void
+    + AllRecipeList(ingredientMaster: IngredientMaster)
     + getRecipeList(): ArrayList<Recipe>
+    + addRecipe(recipe: Recipe): void
+    + deleteRecipe(recipe: Recipe): void
+    + updateRecipe(recipe: Recipe): void
 }
 
 class RecipeIO <<utility>> {
     + {static} FORMAT_VERSION: int = 1
+    - RecipeIO()
     + {static} exportToJson(recipes: List<Recipe>): String
-    + {static} parseFromJson(json, ingredientMaster): List<Recipe>
+    - {static} serializeRecipe(r: Recipe, indent: String): String
+    + {static} parseFromJson(json: String, ingredientMaster: IngredientMaster): List<Recipe>
+    - {static} parseRecipe(obj: String, im: IngredientMaster): Recipe
+    - {static} lookupIngredient(im: IngredientMaster, name: String): Ingredient
+    - {static} extractJsonString(obj: String, key: String): String
+    - {static} extractJsonStringArray(obj: String, key: String): String[]
+    - {static} findUnescapedQuote(s: String, pos: int): int
+    - {static} findMatchingBracket(s: String, start: int, open: char, close: char): int
+    - {static} jsonEscape(s: String): String
+    - {static} jsonUnescape(s: String): String
 }
 
-note right of RecipeIO
-  外部ライブラリに依存せず純Javaで
-  レシピの JSON 入出力を行う。
-  バックアップや別端末への移行に利用
-end note
+class BatchUrlImporter <<utility>> {
+    - BatchUrlImporter()
+    + {static} readUrls(file: Path): List<String>
+    + {static} importAll(urls: List<String>, aiService: RecipeAIService, master: IngredientMaster, recipeList: AllRecipeList, onProgress: Consumer<Progress>, cancelCheck: BooleanSupplier): Result
+    - {static} buildRecipe(result: String[], url: String, master: IngredientMaster): Recipe
+}
+
+enum "BatchUrlImporter.Status" as BatchStatus {
+    PROCESSING
+    SUCCEEDED
+    FAILED
+    SKIPPED_DUPLICATE
+}
+
+class "BatchUrlImporter.Result" as BatchResult {
+    + {final} succeeded: int
+    + {final} failed: int
+    + {final} skipped: int
+    + {final} total: int
+    + Result(succeeded: int, failed: int, skipped: int, total: int)
+}
+
+class "BatchUrlImporter.Progress" as BatchProgress {
+    + {final} index: int
+    + {final} total: int
+    + {final} url: String
+    + {final} status: Status
+    + Progress(index: int, total: int, url: String, status: Status)
+}
+
+BatchUrlImporter +-- BatchStatus
+BatchUrlImporter +-- BatchResult
+BatchUrlImporter +-- BatchProgress
+BatchProgress --> BatchStatus
 
 ' ===== 永続化層 =====
 class RecipeRepository {
-    - dbPath: String
-    - ingredientMaster: IngredientMaster
+    - {final} dbPath: String
+    - {final} ingredientMaster: IngredientMaster
+    + RecipeRepository(dbPath: String, ingredientMaster: IngredientMaster)
     + {static} resolveDbPath(): String
+    - connect(): Connection
+    - ensureSchema(): void
     + findAll(): List<Recipe>
     + insert(recipe: Recipe): long
     + update(recipe: Recipe): void
     + delete(id: long): void
-    - ensureSchema(): void
-    - connect(): Connection
     - lookupIngredient(name: String): Ingredient
 }
 
-note right of RecipeRepository
-  SQLite (sqlite-jdbc) で
-  recipes / recipe_categories /
-  recipe_ingredients の3表を管理
-end note
+class "RecipeRepository.RecipeBuilder" as RecipeBuilder {
+    ~ {final} id: long
+    ~ {final} title: String
+    ~ {final} url: String
+    ~ {final} ingredients: ArrayList<Ingredient>
+    ~ {final} categories: EnumSet<RecipeCategory>
+}
+
+RecipeRepository +-- RecipeBuilder
 
 ' ===== ユーティリティ =====
 class WebPageFetcher <<utility>> {
+    - {static} MAX_BYTES: int = 200_000
+    - {static} MAX_TEXT_LENGTH: int = 3000
+    - {static} CONNECT_TIMEOUT_MS: int = 5000
+    - {static} READ_TIMEOUT_MS: int = 5000
+    - WebPageFetcher()
     + {static} fetchSummary(url: String): String
-    - {static} readBytes(is, maxBytes): byte[]
-    - {static} detectCharset(contentType, snippet): Charset
+    - {static} readBytes(is: InputStream, maxBytes: int): byte[]
+    - {static} detectCharset(contentType: String, htmlSnippet: String): Charset
     - {static} htmlToText(html: String): String
 }
 
 class YoutubeMetadataFetcher <<utility>> {
+    - {static} CONNECT_TIMEOUT_MS: int = 5000
+    - {static} READ_TIMEOUT_MS: int = 8000
+    - {static} MAX_TRANSCRIPT_LENGTH: int = 4000
+    - {static} DESCRIPTION_SUFFICIENT_THRESHOLD: int = 150
+    - YoutubeMetadataFetcher()
     + {static} fetchSummary(url: String): String
-    + {static} fetchSummary(url, ingredientNames): String
-    - {static} extractVideoId(url: String): String
-    - {static} fetchTitle(videoUrl: String): String
+    + {static} fetchSummary(url: String, ingredientNames: List<String>): String
+    - {static} stripUrls(s: String): String
+    - {static} containsAnyIngredient(text: String, ingredientNames: List<String>): boolean
     - {static} extractDescription(html: String): String
     - {static} extractTranscript(html: String): String
+    - {static} extractVideoId(url: String): String
+    - {static} fetchTitle(videoUrl: String): String
     - {static} parseTranscriptXml(xml: String): String
-    - {static} stripUrls(s: String): String
-    - {static} containsAnyIngredient(text, names): boolean
-    - {static} httpGet(url, accept): String
+    - {static} httpGet(url: String, accept: String): String
+    - {static} findUnescapedQuote(s: String, pos: int): int
+    - {static} jsonUnescape(s: String): String
 }
 
 class WhisperTranscriber <<utility>> {
+    - {static} TRANSCRIBE_TIMEOUT_SEC: long = 600
+    - WhisperTranscriber()
+    - {static} isWindows(): boolean
+    - {static} executableName(baseName: String): String
     + {static} isAvailable(): boolean
     + {static} transcribe(youtubeUrl: String): String
-    - {static} runProcess(workingDir, timeout, command...): int
-    - {static} locateTool(name: String): Path
+    - {static} runProcess(workingDir: Path, timeoutSec: long, command: String...): int
+    - {static} locateTool(baseName: String): Path
+    - {static} findOnSystemPath(exeName: String): Path
     - {static} locateWhisperCli(): Path
+    - {static} locateBundledTool(baseName: String): Path
     - {static} locateModel(): Path
+    - {static} toolsDirCandidates(): Path[]
+    - {static} modelDirCandidates(): Path[]
+    - {static} deleteRecursively(root: Path): void
 }
 
-note right of WhisperTranscriber
-  YouTube字幕が無い時のフォールバック。
-  yt-dlp で 16kHz mono WAV を抽出し、
-  whisper.cpp で文字起こし。
-  バイナリ&モデルは setup-whisper.bat で
-  lib/tools/, lib/models/ に取得する
-end note
-
-note right of YoutubeMetadataFetcher
-  oEmbed でタイトル取得 +
-  watch ページから captionTracks を抽出して
-  字幕(timedtext)を取得・テキスト化。
-  Ollama等の動画非対応モデル向けに
-  プロンプトへ動画情報を注入する
-end note
-
-' ===== 暗号化キーストア層 =====
+' 暗号化層
 class SecureKeyStore {
     - {static} ALGO: String = "AES/GCM/NoPadding"
-    - masterKey: SecretKey
-    - random: SecureRandom
+    - {static} GCM_TAG_BITS: int = 128
+    - {static} IV_BYTES: int = 12
+    - {static} KEY_BYTES: int = 32
+    - {final} masterKey: SecretKey
+    - {final} random: SecureRandom
+    + SecureKeyStore()
+    - {static} keyFilePath(): Path
+    - loadOrCreateMasterKey(): SecretKey
+    - {static} tryRestrictPermissions(p: Path): void
     + encrypt(plain: String): String
     + decrypt(ciphertextB64: String): String
-    - loadOrCreateMasterKey(): SecretKey
-    - {static} keyFilePath(): Path
-    - {static} tryRestrictPermissions(p: Path): void
 }
-
-note right of SecureKeyStore
-  AES-256-GCM。マスタ鍵は
-  ~/.recipemanager/master.key に
-  パーミッション制限付きで保存。
-  初回起動時に乱数生成
-end note
 
 class ApiKeyStore {
     - {static} PREF_PREFIX: String = "apiKey."
-    - secure: SecureKeyStore
-    - prefs: Preferences
+    - {final} secure: SecureKeyStore
+    - {final} prefs: Preferences
+    + ApiKeyStore(secure: SecureKeyStore, prefs: Preferences)
     + getKey(provider: Provider): String
     + setKey(provider: Provider, plainKey: String): void
     + clearAll(): void
 }
 
-' ===== AI サービス層 =====
+'AI制御層
 class RecipeAIService {
     - selectedProvider: Provider
     - apiKey: String
     - modelName: String
-    + setConfig(provider, apiKey, modelName): void
-    + suggestRecipe(url, allIngredients): String[]
-    + getModelsForProvider(provider): String[]
-    + fetchModelsForProvider(provider, apiKey): String[]
-    - {static} createProvider(provider, modelName): AbstractRecipeAIProvider
-    - {static} ollamaProviderForModel(modelName): OllamaProvider
+    + setConfig(provider: Provider, apiKey: String, modelName: String): void
+    + suggestRecipe(url: String, allIngredients: ArrayList<Ingredient>): String[]
+    + getModelsForProvider(provider: Provider): String[]
+    + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
+    - {static} createProvider(provider: Provider, modelName: String): AbstractRecipeAIProvider
+    - {static} ollamaProviderForModel(modelName: String): OllamaProvider
+    - {static} ollamaSubclasses(): OllamaProvider[]
 }
 
 enum "RecipeAIService.Provider" as Provider {
@@ -315,64 +383,50 @@ enum "RecipeAIService.Provider" as Provider {
 }
 
 abstract class AbstractRecipeAIProvider {
-    + {abstract} generateRecipe(apiKey, modelName, url, ings): String[]
+    + {abstract} generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
     + {abstract} getAvailableModels(): String[]
     + fetchAvailableModels(apiKey: String): String[]
-    # buildPrompt(url, allIngredients): String
-    # parseJsonResponse(escapedJson: String): String[]
-    # extractAndParse(jsonRes: String, contentKey: String): String[]
-    # stripBrackets(s: String): String
-    # {static} readStream(stream: InputStream): String
-    # {static} findUnescapedQuote(s, pos): int
+    # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
+    # parseJsonResponse(escapedJsonText: String): String[]
+    - extractJsonString(text: String, key: String, fallback: String): String
+    - extractJsonStringArray(text: String, key: String): String[]
+    # {static} findUnescapedQuote(s: String, pos: int): int
     # {static} jsonEscape(s: String): String
     # {static} jsonUnescape(s: String): String
     # {static} extractAllJsonStrings(json: String, key: String): List<String>
-    - extractJsonString(text, key, fallback): String
-    - extractJsonStringArray(text, key): String[]
+    # stripBrackets(s: String): String
+    # {static} readStream(stream: InputStream): String
+    # extractAndParse(jsonRes: String, contentKey: String): String[]
 }
-
-note right of AbstractRecipeAIProvider
-  4プロバイダー共通の処理を集約:
-  - readStream / extractAndParse は
-    レスポンスJSONからモデル出力を抽出
-  - fetchAvailableModels は静的フォールバック
-  - GET /models 対応プロバイダーは override
-end note
 
 class OpenAIProvider {
     + generateRecipe(...): String[]
-    + getAvailableModels(): String[]
-    + fetchAvailableModels(apiKey): String[]
+    + fetchAvailableModels(apiKey: String): String[]
     - {static} isChatModel(id: String): boolean
+    + getAvailableModels(): String[]
 }
 
 class GeminiProvider {
     + generateRecipe(...): String[]
-    + getAvailableModels(): String[]
-    + fetchAvailableModels(apiKey): String[]
-    - postWithRetry(url, json): String
+    - postWithRetry(urlStr: String, json: String): String
     ~ {static} canonicalYoutubeUrl(url: String): String
     - {static} extractYoutubeVideoId(url: String): String
+    + fetchAvailableModels(apiKey: String): String[]
+    + getAvailableModels(): String[]
 }
 
 class ClaudeProvider {
     + generateRecipe(...): String[]
+    + fetchAvailableModels(apiKey: String): String[]
     + getAvailableModels(): String[]
-    + fetchAvailableModels(apiKey): String[]
 }
 
 abstract class OllamaProvider {
     # {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
     # {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
-    + generateRecipe(apiKey, modelName, url, ings): String[]
-    + fetchAvailableModels(apiKey): String[]
+    + fetchAvailableModels(apiKey: String): String[]
+    + generateRecipe(apiKey: String, modelName: String, url: String, ings: ArrayList<Ingredient>): String[]
 }
-
-note right of OllamaProvider
-  ローカルLLM Ollama 用の基底クラス。
-  /api/chat に format:"json" で問い合わせ、
-  各モデルファミリは具象サブクラスで列挙
-end note
 
 class LlamaProvider {
     + getAvailableModels(): String[]
@@ -390,8 +444,7 @@ class QwenProvider {
     + getAvailableModels(): String[]
 }
 
-' ===== 関連 =====
-' --- UI層 ---
+' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
 SwingMain o--> RegisterRecipePanel    : creates >
@@ -404,7 +457,12 @@ IngredientMasterPanel ..> SwingMain
 IngredientMasterPanel ..> IngredientMaster : edits & persists
 DataIOPanel ..> SwingMain
 DataIOPanel ..> RecipeIO : uses
+DataIOPanel ..> BatchUrlImporter : URL一括取込
+DataIOPanel ..> RecipeAIService  : 一括取込時に呼び出し
 DataIOPanel ..> UIComponents
+BatchUrlImporter ..> RecipeAIService
+BatchUrlImporter ..> IngredientMaster
+BatchUrlImporter ..> AllRecipeList
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 
 RegisterRecipePanel ..> SwingMain
