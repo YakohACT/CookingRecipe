@@ -28,6 +28,18 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception;
 
     /**
+     * 任意のプロンプトをモデルへ送り、モデルが返した本文(テキスト)をそのまま返す汎用呼び出し。
+     * レシピ生成以外の用途(食材の表記ゆれ検出など)で、JSONを期待する処理から利用する。
+     * 実装側はJSON出力を促す設定(json_object / responseMimeType など)を付与してよい。
+     * @param apiKey    APIキー(Ollamaは未使用)
+     * @param modelName モデル名
+     * @param prompt    送信するプロンプト本文
+     * @return モデルが返したテキスト(unescape済み。多くの場合JSON文字列)
+     * @throws Exception API呼び出し/解析失敗時
+     */
+    public abstract String chat(String apiKey, String modelName, String prompt) throws Exception;
+
+    /**
      * このプロバイダーで選択可能なモデル名の配列を返す(静的フォールバック)。
      * @return モデル名配列
      */
@@ -330,6 +342,31 @@ public abstract class AbstractRecipeAIProvider {
      * @throws Exception キーが見つからない/値の境界が壊れている場合
      */
     protected String[] extractAndParse(String jsonRes, String contentKey) throws Exception {
+        return parseJsonResponse(extractContentField(jsonRes, contentKey));
+    }
+
+    /**
+     * APIレスポンス全体から指定キーの文字列値(モデル本文)を取り出し、unescapeして返す。
+     * {@link #extractAndParse} がレシピJSONとして解釈するのに対し、こちらは生のテキストを返すので
+     * 表記ゆれ検出など別形式のJSONを呼び出し側で自由にパースできる。
+     * @param jsonRes    APIレスポンス全体のJSON文字列
+     * @param contentKey 抜き出す対象キー名(例: "content", "text")
+     * @return モデル本文(unescape済み)
+     * @throws Exception キーが見つからない/値の境界が壊れている場合
+     */
+    protected String extractRawContent(String jsonRes, String contentKey) throws Exception {
+        return jsonUnescape(extractContentField(jsonRes, contentKey));
+    }
+
+    /**
+     * APIレスポンス全体から指定キーの文字列値(まだエスケープされた状態の部分文字列)を切り出す。
+     * {@link #extractAndParse} と {@link #extractRawContent} の共通の境界検出ロジック。
+     * @param jsonRes    APIレスポンス全体のJSON文字列
+     * @param contentKey 抜き出す対象キー名
+     * @return エスケープされたままの content 部分文字列
+     * @throws Exception キーが見つからない/値の境界が壊れている場合
+     */
+    private String extractContentField(String jsonRes, String contentKey) throws Exception {
         String quotedKey = "\"" + contentKey + "\":";
         int keyIdx = jsonRes.indexOf(quotedKey);
         if (keyIdx == -1) {
@@ -344,6 +381,6 @@ public abstract class AbstractRecipeAIProvider {
         if (end == -1) {
             throw new Exception("レスポンス解析失敗: " + contentKey + "フィールドの終端が見つかりません");
         }
-        return parseJsonResponse(jsonRes.substring(start, end));
+        return jsonRes.substring(start, end);
     }
 }

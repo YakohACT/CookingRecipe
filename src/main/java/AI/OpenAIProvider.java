@@ -16,17 +16,40 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        String prompt = buildPrompt(url, allIngredients);
-        String safePrompt = jsonEscape(prompt);
+        String response = post(apiKey, buildBody(modelName, buildPrompt(url, allIngredients)));
+        // choices[0].message.content からモデルが返したJSON文字列を抽出してパース
+        return extractAndParse(response, "content");
+    }
 
-        // response_format で JSON オブジェクト出力を強制し、温度を下げて安定化する
-        String json = "{"
+    @Override
+    public String chat(String apiKey, String modelName, String prompt) throws Exception {
+        return extractRawContent(post(apiKey, buildBody(modelName, prompt)), "content");
+    }
+
+    /**
+     * ChatCompletions のリクエストボディを組み立てる。
+     * response_format で JSON オブジェクト出力を強制し、温度を下げて安定化する。
+     * @param modelName モデル名
+     * @param prompt    ユーザープロンプト
+     * @return JSONリクエストボディ
+     */
+    private static String buildBody(String modelName, String prompt) {
+        return "{"
                 + "\"model\":\"" + modelName + "\","
                 + "\"response_format\":{\"type\":\"json_object\"},"
                 + "\"temperature\":0.3,"
-                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + safePrompt + "\"}]"
+                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + jsonEscape(prompt) + "\"}]"
                 + "}";
+    }
 
+    /**
+     * ChatCompletions エンドポイントへPOSTし、レスポンスボディ全体を返す。
+     * @param apiKey OpenAI APIキー
+     * @param body   リクエストボディJSON
+     * @return レスポンスボディ文字列
+     * @throws Exception 通信失敗 / HTTP非200時
+     */
+    private String post(String apiKey, String body) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL("https://api.openai.com/v1/chat/completions").openConnection();
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
@@ -35,7 +58,7 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
         conn.setReadTimeout(60000);
         conn.setDoOutput(true);
         try (OutputStream os = conn.getOutputStream()) {
-            os.write(json.getBytes(StandardCharsets.UTF_8));
+            os.write(body.getBytes(StandardCharsets.UTF_8));
         }
 
         int responseCode = conn.getResponseCode();
@@ -43,9 +66,7 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
             String errorBody = readStream(conn.getErrorStream());
             throw new Exception("OpenAI API エラー (HTTP " + responseCode + "): " + errorBody);
         }
-
-        // choices[0].message.content からモデルが返したJSON文字列を抽出してパース
-        return extractAndParse(readStream(conn.getInputStream()), "content");
+        return readStream(conn.getInputStream());
     }
 
     /**

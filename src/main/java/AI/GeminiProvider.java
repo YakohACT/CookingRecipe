@@ -61,6 +61,18 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         return extractAndParse(jsonRes, "text");
     }
 
+    @Override
+    public String chat(String apiKey, String modelName, String prompt) throws Exception {
+        String cleanKey = apiKey.trim();
+        String safePrompt = jsonEscape(prompt);
+        // レシピ生成と違い動画添付や固定スキーマは不要。JSON出力だけ促す
+        String json = "{\"contents\":[{\"parts\":[{\"text\":\"" + safePrompt + "\"}]}],"
+                + "\"generationConfig\":{\"responseMimeType\":\"application/json\",\"temperature\":0.2}}";
+        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
+                + ":generateContent?key=" + URLEncoder.encode(cleanKey, StandardCharsets.UTF_8);
+        return extractRawContent(postWithRetry(urlStr, json), "text");
+    }
+
     /**
      * 503 (一時的サーバー過負荷) の場合は指数バックオフでリトライする。
      * @param urlStr 送信先URL

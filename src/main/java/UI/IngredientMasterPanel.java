@@ -1,8 +1,10 @@
 package main.java.UI;
 
 import main.java.SwingMain;
+import main.java.AI.RecipeAIService;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.IngredientCategory;
+import main.java.Recipe.IngredientNormalizer;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -10,7 +12,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 登録済み食材一覧を JTable で閲覧・編集する画面パネル。
@@ -55,7 +59,19 @@ public class IngredientMasterPanel extends JPanel {
         UIComponents.addLeftAligned(header, titleLabel);
         header.add(Box.createRigidArea(new Dimension(0, 8)));
         UIComponents.addLeftAligned(header, hint);
-        add(header, BorderLayout.NORTH);
+
+        // 右上: 表記ゆれをAIで統一するボタン
+        JButton btnUnify = buildUnifyButton();
+        btnUnify.addActionListener(e -> detectAndUnifyVariants());
+        JPanel northEast = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        northEast.setOpaque(false);
+        northEast.add(btnUnify);
+
+        JPanel north = new JPanel(new BorderLayout());
+        north.setOpaque(false);
+        north.add(header, BorderLayout.CENTER);
+        north.add(northEast, BorderLayout.EAST);
+        add(north, BorderLayout.NORTH);
 
         // ===== テーブル =====
         String[] cols = {"#", "カテゴリー", "食材名"};
@@ -170,6 +186,157 @@ public class IngredientMasterPanel extends JPanel {
     private void refreshRowNumbers() {
         for (int i = 0; i < model.getRowCount(); i++) {
             model.setValueAt(i + 1, i, COL_NO);
+        }
+    }
+
+    /**
+     * 「表記ゆれをAIで統一」ボタンの見た目を構築する(AI機能であることを示す紫色)。
+     * @return スタイル適用済みの JButton
+     */
+    private JButton buildUnifyButton() {
+        JButton btn = new JButton("✨ 表記ゆれをAIで統一");
+        btn.setBackground(Theme.COLOR_AI);
+        btn.setForeground(Color.WHITE);
+        btn.setOpaque(true);
+        btn.setBorderPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    /**
+     * AIに食材名の表記ゆれを検出させ、確認のうえマスタとレシピへ統一を適用する。
+     * AIの呼び出しはモーダル進捗ダイアログ付きでバックグラウンド実行する。
+     */
+    private void detectAndUnifyVariants() {
+        if (table.isEditing()) table.getCellEditor().stopCellEditing();
+
+        // Ollama 以外は APIキー必須
+        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
+                && owner.getCurrentApiKey().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
+                    "AI未設定", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        List<String> names = new ArrayList<>();
+        for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) names.add(ing.getName());
+        if (names.size() < 2) {
+            JOptionPane.showMessageDialog(this,
+                    "食材が2件未満のため、表記ゆれ検出をスキップしました。",
+                    "情報", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // モーダル進捗ダイアログ(不確定バー)
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(parent, "AIが表記ゆれを解析中…", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        JProgressBar bar = new JProgressBar();
+        bar.setIndeterminate(true);
+        JLabel msg = new JLabel("食材名を解析しています。しばらくお待ちください…");
+        msg.setFont(Theme.FONT_MAIN);
+        JPanel content = new JPanel(new BorderLayout(0, 12));
+        content.setBorder(new EmptyBorder(20, 24, 20, 24));
+        content.add(msg, BorderLayout.NORTH);
+        content.add(bar, BorderLayout.CENTER);
+        dialog.setContentPane(content);
+        dialog.pack();
+        dialog.setSize(Math.max(440, dialog.getWidth()), dialog.getHeight());
+        dialog.setLocationRelativeTo(this);
+
+        SwingWorker<List<IngredientNormalizer.VariantGroup>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<IngredientNormalizer.VariantGroup> doInBackground() throws Exception {
+                RecipeAIService svc = new RecipeAIService();
+                svc.setConfig(owner.getCurrentAiProvider(),
+                        owner.getCurrentApiKey(),
+                        owner.getCurrentModelName());
+                return svc.detectIngredientVariants(names);
+            }
+
+            @Override
+            protected void done() {
+                dialog.dispose();
+                List<IngredientNormalizer.VariantGroup> groups;
+                try {
+                    groups = get();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(IngredientMasterPanel.this,
+                            "AIの呼び出しに失敗しました。\n設定内容やコンソールのエラーを確認してください。",
+                            "エラー", JOptionPane.ERROR_MESSAGE);
+                    ex.printStackTrace();
+                    return;
+                }
+                handleDetectedGroups(groups);
+            }
+        };
+        worker.execute();
+        dialog.setVisible(true);
+    }
+
+    /**
+     * AIが検出したグループを現在のマスタと突き合わせて確認ダイアログを出し、
+     * ユーザーがOKしたら統一を適用してテーブルを再読込する。
+     * @param groups AIが返した表記ゆれグループ
+     */
+    private void handleDetectedGroups(List<IngredientNormalizer.VariantGroup> groups) {
+        // 現在マスタに実在する名前だけに絞り込み、表示用に整形
+        Set<String> existing = new HashSet<>();
+        for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) existing.add(ing.getName());
+
+        List<IngredientNormalizer.VariantGroup> effective = new ArrayList<>();
+        for (IngredientNormalizer.VariantGroup g : groups) {
+            if (g.canonical == null || !existing.contains(g.canonical)) continue;
+            List<String> vs = new ArrayList<>();
+            for (String v : g.variants) {
+                if (v != null && existing.contains(v) && !v.equals(g.canonical)) vs.add(v);
+            }
+            if (!vs.isEmpty()) effective.add(new IngredientNormalizer.VariantGroup(g.canonical, vs));
+        }
+
+        if (effective.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "表記ゆれは見つかりませんでした。",
+                    "検出結果", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("以下の表記ゆれが見つかりました。統一しますか？\n");
+        sb.append("(食材マスタと、その食材を使っている全レシピを書き換えます)\n\n");
+        for (IngredientNormalizer.VariantGroup g : effective) {
+            sb.append(String.join("・", g.variants)).append("  →  ").append(g.canonical).append("\n");
+        }
+
+        JTextArea area = new JTextArea(sb.toString());
+        area.setEditable(false);
+        area.setFont(Theme.FONT_MAIN);
+        area.setCaretPosition(0);
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setPreferredSize(new Dimension(460, Math.min(360, 90 + effective.size() * 22)));
+
+        int ok = JOptionPane.showConfirmDialog(this, scroll, "統一の確認", JOptionPane.OK_CANCEL_OPTION);
+        if (ok != JOptionPane.OK_OPTION) return;
+
+        IngredientNormalizer.ApplyResult result = IngredientNormalizer.apply(
+                effective, owner.getIngredientMaster(), owner.getAllRecipeList());
+
+        reloadTable();
+        JOptionPane.showMessageDialog(this,
+                "統一が完了しました。\n"
+                + "統合した別表記: " + result.mergedNames + "件\n"
+                + "更新したレシピ: " + result.updatedRecipes + "件",
+                "完了", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /**
+     * テーブルの内容を現在の食材マスタから再読込する(統一適用後の反映用)。
+     */
+    private void reloadTable() {
+        model.setRowCount(0);
+        for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) {
+            model.addRow(new Object[]{model.getRowCount() + 1, ing.getCategory(), ing.getName()});
         }
     }
 

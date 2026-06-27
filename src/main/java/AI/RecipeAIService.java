@@ -2,8 +2,10 @@ package main.java.AI;
 
 import main.java.AI.Ollama.*;
 import main.java.Recipe.Ingredient;
+import main.java.Recipe.IngredientNormalizer;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ユーザー設定を保持し、各AIプロバイダーへ処理を委譲する橋渡しクラス
@@ -46,6 +48,23 @@ public class RecipeAIService {
 
         // modelName も一緒に渡す
         return aiProvider.generateRecipe(apiKey, modelName, url, allIngredients);
+    }
+
+    /**
+     * 設定済みプロバイダーに、食材名の表記ゆれグループを検出させる。
+     * Ollama 以外で APIキー未設定の場合は例外を投げる。
+     * @param ingredientNames 現在登録されている全食材名
+     * @return 表記ゆれグループのリスト(表記ゆれが無ければ空)
+     * @throws Exception API呼び出し失敗時 / APIキー未設定時
+     */
+    public List<IngredientNormalizer.VariantGroup> detectIngredientVariants(List<String> ingredientNames) throws Exception {
+        if (selectedProvider != Provider.OLLAMA && (apiKey == null || apiKey.isEmpty())) {
+            throw new Exception("APIキーが設定されていない");
+        }
+        AbstractRecipeAIProvider aiProvider = createProvider(selectedProvider, modelName);
+        String prompt = IngredientNormalizer.buildPrompt(ingredientNames);
+        String json = aiProvider.chat(apiKey, modelName, prompt);
+        return IngredientNormalizer.parseGroups(json);
     }
 
     /**

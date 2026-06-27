@@ -90,6 +90,10 @@ class IngredientMasterPanel extends JPanel {
     - moveSelected(delta: int): void
     - swapRows(a: int, b: int): void
     - refreshRowNumbers(): void
+    - buildUnifyButton(): JButton
+    - detectAndUnifyVariants(): void
+    - handleDetectedGroups(groups): void
+    - reloadTable(): void
     - save(): void
 }
 
@@ -259,6 +263,38 @@ BatchUrlImporter +-- BatchResult
 BatchUrlImporter +-- BatchProgress
 BatchProgress --> BatchStatus
 
+class IngredientNormalizer <<utility>> {
+    - IngredientNormalizer()
+    + {static} buildPrompt(names: List<String>): String
+    + {static} parseGroups(json: String): List<VariantGroup>
+    + {static} apply(groups: List<VariantGroup>, master: IngredientMaster, recipeList: AllRecipeList): ApplyResult
+}
+
+class "IngredientNormalizer.VariantGroup" as VariantGroup {
+    + {final} canonical: String
+    + {final} variants: List<String>
+}
+
+class "IngredientNormalizer.ApplyResult" as ApplyResult {
+    + {final} mergedNames: int
+    + {final} updatedRecipes: int
+}
+
+note right of IngredientNormalizer
+  食材名の表記ゆれをAIで統一する処理。
+  buildPrompt→(RecipeAIService.chat)→parseGroups で
+  検出し、apply でマスタとレシピを書き換える。
+  AI実装には依存せず文字列入出力のみを扱う。
+end note
+
+IngredientNormalizer +-- VariantGroup
+IngredientNormalizer +-- ApplyResult
+IngredientNormalizer ..> IngredientMaster : replaceAll で集約
+IngredientNormalizer ..> AllRecipeList : updateRecipe で置換
+RecipeAIService ..> IngredientNormalizer : buildPrompt / parseGroups
+IngredientMasterPanel ..> RecipeAIService : 表記ゆれ検出
+IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
+
 ' ===== 永続化層 =====
 class RecipeRepository {
     - {final} dbPath: String
@@ -368,6 +404,7 @@ class RecipeAIService {
     - modelName: String
     + setConfig(provider: Provider, apiKey: String, modelName: String): void
     + suggestRecipe(url: String, allIngredients: ArrayList<Ingredient>): String[]
+    + detectIngredientVariants(names: List<String>): List<VariantGroup>
     + getModelsForProvider(provider: Provider): String[]
     + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
     - {static} createProvider(provider: Provider, modelName: String): AbstractRecipeAIProvider
@@ -384,6 +421,7 @@ enum "RecipeAIService.Provider" as Provider {
 
 abstract class AbstractRecipeAIProvider {
     + {abstract} generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
+    + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
     + {abstract} getAvailableModels(): String[]
     + fetchAvailableModels(apiKey: String): String[]
     # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
@@ -397,17 +435,30 @@ abstract class AbstractRecipeAIProvider {
     # stripBrackets(s: String): String
     # {static} readStream(stream: InputStream): String
     # extractAndParse(jsonRes: String, contentKey: String): String[]
+    # extractRawContent(jsonRes: String, contentKey: String): String
+    - extractContentField(jsonRes: String, contentKey: String): String
 }
+
+note right of AbstractRecipeAIProvider
+  generateRecipe はレシピ生成専用。
+  chat は任意プロンプト→モデル本文(JSON)を返す
+  汎用呼び出しで、表記ゆれ検出などに使う。
+  各具象は post/buildBody でHTTPを共通化。
+end note
 
 class OpenAIProvider {
     + generateRecipe(...): String[]
+    + chat(apiKey, modelName, prompt): String
     + fetchAvailableModels(apiKey: String): String[]
+    - {static} buildBody(modelName: String, prompt: String): String
+    - post(apiKey: String, body: String): String
     - {static} isChatModel(id: String): boolean
     + getAvailableModels(): String[]
 }
 
 class GeminiProvider {
     + generateRecipe(...): String[]
+    + chat(apiKey, modelName, prompt): String
     - postWithRetry(urlStr: String, json: String): String
     ~ {static} canonicalYoutubeUrl(url: String): String
     - {static} extractYoutubeVideoId(url: String): String
@@ -417,6 +468,9 @@ class GeminiProvider {
 
 class ClaudeProvider {
     + generateRecipe(...): String[]
+    + chat(apiKey, modelName, prompt): String
+    - {static} buildBody(modelName: String, prompt: String, maxTokens: int): String
+    - post(apiKey: String, body: String): String
     + fetchAvailableModels(apiKey: String): String[]
     + getAvailableModels(): String[]
 }
@@ -426,6 +480,8 @@ abstract class OllamaProvider {
     # {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
     + fetchAvailableModels(apiKey: String): String[]
     + generateRecipe(apiKey: String, modelName: String, url: String, ings: ArrayList<Ingredient>): String[]
+    + chat(apiKey, modelName, prompt): String
+    - post(modelName: String, prompt: String): String
 }
 
 class LlamaProvider {

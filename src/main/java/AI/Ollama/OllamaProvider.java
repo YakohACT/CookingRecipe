@@ -57,15 +57,32 @@ public abstract class OllamaProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        String prompt = buildPrompt(url, allIngredients);
-        String safePrompt = jsonEscape(prompt);
+        String response = post(modelName, buildPrompt(url, allIngredients));
+        // Ollama レスポンス形式: {"message": {"role":"assistant","content":"..."}, "done": true, ...}
+        // content フィールドの中身がモデルの返したJSON文字列
+        return extractAndParse(response, "content");
+    }
 
+    @Override
+    public String chat(String apiKey, String modelName, String prompt) throws Exception {
+        return extractRawContent(post(modelName, prompt), "content");
+    }
+
+    /**
+     * Ollama /api/chat へPOSTし、レスポンスボディ全体を返す。
+     * format:"json" で必ずJSONを返させ、温度を下げて安定化する。
+     * @param modelName モデル名
+     * @param prompt    ユーザープロンプト
+     * @return レスポンスボディ文字列
+     * @throws Exception 接続不可 / HTTP非200時
+     */
+    private String post(String modelName, String prompt) throws Exception {
         String json = "{"
                 + "\"model\":\"" + modelName + "\","
                 + "\"stream\":false,"
                 + "\"format\":\"json\","
                 + "\"options\":{\"temperature\":0.3},"
-                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + safePrompt + "\"}]"
+                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + jsonEscape(prompt) + "\"}]"
                 + "}";
 
         HttpURLConnection conn;
@@ -90,9 +107,6 @@ public abstract class OllamaProvider extends AbstractRecipeAIProvider {
             throw new Exception("Ollama API エラー (HTTP " + responseCode + "): " + errorBody
                     + "\n(モデル '" + modelName + "' が `ollama pull` 済みかも確認してください)");
         }
-
-        // Ollama レスポンス形式: {"message": {"role":"assistant","content":"..."}, "done": true, ...}
-        // content フィールドの中身がモデルの返したJSON文字列
-        return extractAndParse(readStream(conn.getInputStream()), "content");
+        return readStream(conn.getInputStream());
     }
 }
