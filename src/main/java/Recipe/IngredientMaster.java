@@ -12,15 +12,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * CSVから食材データを読み込み管理するクラス。
- * LinkedHashMap を使うことで、CSVに記述された順序のまま取り出せる
+ * CSVから食材データを読み込み管理するクラス
  */
 public class IngredientMaster {
     private LinkedHashMap<Ingredient, String> database;
 
     /**
-     * インスタンス生成と同時に database.csv を読み込む。
-     * CSV が見つからない場合は database が空のまま生成される。
+     * コンストラクタ
+     * 同時にdatabase.csvを読み込む
      */
     public IngredientMaster() {
         database = new LinkedHashMap<>();
@@ -28,15 +27,14 @@ public class IngredientMaster {
     }
 
     /**
-     * database.csv からのデータ読み込み。
+     * database.csvをロードするメソッド
      * 実行ディレクトリ依存の相対パスをまず試し、それでも見つからない場合は
-     * 自身のJAR(またはクラスファイル)と同階層・1つ上の階層も探す。
-     * jpackage で配布された .exe からの起動でも見つかるようになっている
+     * 自身のJAR(またはクラスファイル)と同階層・1つ上の階層も探す
      */
     private void loadCsv() {
         File file = locateCsv();
         if (file == null) {
-            System.err.println("[IngredientMaster] database.csv \u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002\u98DF\u6750\u30EA\u30B9\u30C8\u306F\u7A7A\u306E\u307E\u307E\u8D77\u52D5\u3057\u307E\u3059\u3002");
+            System.err.println("[IngredientMaster] database.csv が見つかりません。食材リストは空のまま起動します。");
             return;
         }
 
@@ -50,7 +48,7 @@ public class IngredientMaster {
                 String[] data = line.split(",");
                 if (data.length < 2) {
                     System.err.println("[IngredientMaster] " + file.getName() + ":" + lineNo
-                            + " \u5217\u304C\u4E0D\u8DB3\u3057\u3066\u3044\u308B\u305F\u3081\u30B9\u30AD\u30C3\u30D7: " + line);
+                            + " 列が不足しているためスキップ: " + line);
                     continue;
                 }
                 String catStr = data[0].trim();
@@ -60,18 +58,18 @@ public class IngredientMaster {
                     cat = IngredientCategory.valueOf(catStr);
                 } catch (IllegalArgumentException e) {
                     System.err.println("[IngredientMaster] " + file.getName() + ":" + lineNo
-                            + " \u672A\u77E5\u306E\u30AB\u30C6\u30B4\u30EA '" + catStr + "' \u306E\u305F\u3081\u30B9\u30AD\u30C3\u30D7");
+                            + " 未知のカテゴリ '" + catStr + "' のためスキップ");
                     continue;
                 }
                 database.put(new Ingredient(name, cat), name);
             }
         } catch (IOException e) {
-            System.err.println("[IngredientMaster] CSV\u8AAD\u307F\u8FBC\u307F\u306B\u5931\u6557: " + e.getMessage());
+            System.err.println("[IngredientMaster] CSV読み込みに失敗: " + e.getMessage());
         }
     }
 
     /**
-     * database.csv をいくつかの場所から探す。
+     * database.csv をいくつかの場所から探すメソッド
      * 1. 実行カレント (相対パス候補)
      * 2. 自身がロードされた JAR/クラスディレクトリと同階層
      * 3. その親ディレクトリ
@@ -107,9 +105,9 @@ public class IngredientMaster {
     }
 
     /**
-     * 指定カテゴリーに属する食材を CSV 順で返す。
+     * 指定カテゴリーに属する食材を返すメソッド
      * @param category 絞り込みたい食材カテゴリー
-     * @return 該当食材のリスト(マッチが無い場合は空のリスト)
+     * @return 該当食材のリスト
      */
     public ArrayList<Ingredient> searchIngredient(IngredientCategory category) {
         ArrayList<Ingredient> list = new ArrayList<>();
@@ -120,7 +118,7 @@ public class IngredientMaster {
     }
 
     /**
-     * 全食材を CSV に記述された順序で返す。
+     * 全ての食材をCSVに書き出すメソッド
      * @return 全食材のリスト
      */
     public ArrayList<Ingredient> getAllIngredients() {
@@ -128,9 +126,7 @@ public class IngredientMaster {
     }
 
     /**
-     * 食材一覧を一括置換する(順序・カテゴリの変更を反映)。
-     * メモリ上の database を引数のリストの内容で書き換え、database.csv 全体を書き直す。
-     * 順序はリストの順序がそのまま使われる。
+     * メモリ上のdatabaseを引数のリストの内容で書き換え、database.csv全体を書き直す
      * @param ordered 新しい食材一覧(順序を保持)
      */
     public void replaceAll(List<Ingredient> ordered) {
@@ -144,7 +140,7 @@ public class IngredientMaster {
     }
 
     /**
-     * 現在のメモリ上の食材一覧を database.csv に上書き保存する。
+     * database.csvに上書き保存するメソッド
      */
     private void saveCsv() {
         File csv = locateCsv();
@@ -163,21 +159,21 @@ public class IngredientMaster {
     }
 
     /**
-     * 食材を OTHER カテゴリで追加する(同名の食材が既にあればそれを返す)。
-     * メモリ上のマスタ・database.csv の両方に反映される。
+     * 食材を OTHER カテゴリで追加するメソッド
+     * メモリ上のマスタ・database.csv の両方に反映される
      * @param name 食材名
-     * @return 追加された(または既存の)Ingredient。空文字/null の場合は null
+     * @return 追加されたIngredient、空文字やnullの場合はnull
      */
     public Ingredient addIngredient(String name) {
         return addIngredient(name, IngredientCategory.OTHER);
     }
 
     /**
-     * 食材を指定カテゴリで追加する(同名の食材が既にあればそれを返す)。
-     * メモリ上のマスタ・database.csv の両方に反映される。
+     * 食材を指定カテゴリで追加するメソッド
+     * メモリ上のマスタ・database.csvの両方に反映される
      * @param name     食材名
      * @param category 食材カテゴリ
-     * @return 追加された(または既存の)Ingredient。空文字/null の場合は null
+     * @return 追加されたIngredientクラス。空文字/null の場合は null
      */
     public Ingredient addIngredient(String name, IngredientCategory category) {
         if (name == null) return null;
@@ -194,8 +190,7 @@ public class IngredientMaster {
     }
 
     /**
-     * database.csv の末尾に "<CATEGORY>,<name>" を追記する。
-     * 既に同じ行があればスキップする。失敗時は黙殺する(マスタ追加自体は in-memory に反映済み)。
+     * database.csv の末尾に "<CATEGORY>,<name>" を追記するメソッド
      * @param category 食材カテゴリ
      * @param name     食材名
      */
@@ -210,14 +205,14 @@ public class IngredientMaster {
             List<String> lines = csv.exists()
                     ? Files.readAllLines(csv.toPath(), StandardCharsets.UTF_8)
                     : new ArrayList<>();
-            // 既に同じ行がある場合は何もしない(冪等)。BOM混入も考慮
+            // 既に同じ行がある場合は何もしない
             for (String l : lines) {
                 if (l.replace("﻿", "").trim().equals(entry)) return;
             }
             lines.add(entry);
             Files.write(csv.toPath(), lines, StandardCharsets.UTF_8);
         } catch (Exception ignore) {
-            // 読み書き失敗は無視。in-memoryの追加は既に成功している
+            // 読み書き失敗は無視
         }
     }
 }

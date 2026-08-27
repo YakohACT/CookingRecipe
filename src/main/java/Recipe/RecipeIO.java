@@ -7,8 +7,7 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * レシピの JSON 入出力を担うユーティリティ。
- * 外部ライブラリに依存せず、純Javaで JSON を組み立て・解析する。
+ * レシピのJSON入出力を担うユーティリティ
  *
  * 出力フォーマット:
  * <pre>
@@ -28,15 +27,15 @@ import java.util.List;
  */
 public final class RecipeIO {
 
-    /** ファイルフォーマットのバージョン。後方互換が壊れる変更時にインクリメント */
+    /** ファイルフォーマットのバージョン */
     public static final int FORMAT_VERSION = 1;
 
     private RecipeIO() {}
 
     /**
-     * レシピ一覧を JSON 文字列に書き出す。
+     * レシピ一覧を文字列に書き出すメソッド
      * @param recipes 出力対象のレシピ
-     * @return JSON 文字列(改行・インデント付き)
+     * @return JSON 文字列
      */
     public static String exportToJson(List<Recipe> recipes) {
         StringBuilder sb = new StringBuilder();
@@ -57,7 +56,7 @@ public final class RecipeIO {
     }
 
     /**
-     * 1件のレシピを JSON オブジェクトとしてシリアライズする。
+     * 1件のレシピをオブジェクトとしてシリアライズするメソッド
      * @param r      レシピ
      * @param indent 各行の先頭インデント
      * @return JSON 形式の文字列
@@ -85,12 +84,10 @@ public final class RecipeIO {
     }
 
     /**
-     * JSON 文字列からレシピ一覧を復元する。
-     * 食材名はマスタから解決し、見つからない場合は OTHER カテゴリの暫定 Ingredient を作る。
-     * 不明なカテゴリー値は無視する。
+     * 文字列からレシピ一覧を復元するメソッド
      * @param json             読み込む JSON 文字列
      * @param ingredientMaster 食材名解決用のマスタ
-     * @return 復元されたレシピのリスト(空可)
+     * @return 復元されたレシピのリスト
      */
     public static List<Recipe> parseFromJson(String json, IngredientMaster ingredientMaster) {
         List<Recipe> result = new ArrayList<>();
@@ -117,10 +114,10 @@ public final class RecipeIO {
     }
 
     /**
-     * 1件のレシピ JSON オブジェクト文字列を Recipe に変換する。
+     * 文字列をRecipeに変換するメソッド
      * @param obj JSON オブジェクト文字列
      * @param im  食材マスタ
-     * @return 復元された Recipe (タイトル必須)。タイトルが取れなければ null
+     * @return 復元された Recipe、タイトルが取れなければ null
      */
     private static Recipe parseRecipe(String obj, IngredientMaster im) {
         String title = extractJsonString(obj, "title");
@@ -141,18 +138,18 @@ public final class RecipeIO {
     }
 
     /**
-     * 食材マスタから名前一致で Ingredient を引き、無ければ OTHER カテゴリで
-     * マスタ + database.csv に自動追加してから返す。
+     * 食材マスタから名前一致でIngredientを引き
+     * マスタ + database.csvに自動追加してから返すメソッド
      * @param im   食材マスタ
      * @param name 食材名
-     * @return 解決された Ingredient
+     * @return Ingredient
      */
     private static Ingredient lookupIngredient(IngredientMaster im, String name) {
         if (im != null) {
             for (Ingredient ing : im.getAllIngredients()) {
                 if (ing.getName().equals(name)) return ing;
             }
-            // マスタに無い場合は OTHER で自動追加(database.csv にも書き込む)
+            // マスタに無い場合はOTHERで自動追加
             Ingredient added = im.addIngredient(name);
             if (added != null) return added;
         }
@@ -160,10 +157,10 @@ public final class RecipeIO {
     }
 
     /**
-     * "key":"value" 形式の文字列値を抽出する(unescape 済みで返す)。
+     * "key":"value"形式の文字列値を抽出するメソッド
      * @param obj 検索対象 JSON
      * @param key キー名
-     * @return 値文字列。見つからなければ null
+     * @return 値文字列、見つからなければ null
      */
     private static String extractJsonString(String obj, String key) {
         int keyIdx = obj.indexOf("\"" + key + "\"");
@@ -179,7 +176,7 @@ public final class RecipeIO {
     }
 
     /**
-     * "key":["v1","v2",…] 形式の文字列配列を抽出する。
+     * "key":["v1","v2",…] 形式の文字列配列を抽出するメソッド
      * @param obj 検索対象 JSON
      * @param key キー名
      * @return 値の文字列配列(キーが無ければ空配列)
@@ -205,9 +202,9 @@ public final class RecipeIO {
     }
 
     /**
-     * pos 以降でエスケープされていない最初の '"' を探す。
-     * @param s   走査文字列
-     * @param pos 走査開始位置
+     * pos 以降でエスケープされていない最初の '"' を探すメソッド
+     * @param s   文字列
+     * @param pos 開始位置
      * @return マッチ位置。見つからなければ -1
      */
     private static int findUnescapedQuote(String s, int pos) {
@@ -221,9 +218,9 @@ public final class RecipeIO {
     }
 
     /**
-     * 開き括弧と対応する閉じ括弧を、文字列リテラルを除外した上で探す。
-     * @param s     走査文字列
-     * @param start 開き括弧の位置
+     * 開き括弧と対応する閉じ括弧を、文字列リテラルを除外した上で探すメソッド
+     * @param s     文字列
+     * @param start 括弧の位置
      * @param open  開き括弧文字
      * @param close 閉じ括弧文字
      * @return 対応する閉じ括弧の位置。見つからなければ -1
@@ -249,8 +246,8 @@ public final class RecipeIO {
     }
 
     /**
-     * Java 文字列を JSON 文字列値として埋め込めるようエスケープする。
-     * @param s 元文字列(null 可)
+     * Java 文字列を JSON 文字列値として埋め込めるメソッド
+     * @param s 元文字列
      * @return エスケープ後の文字列
      */
     private static String jsonEscape(String s) {
@@ -275,7 +272,7 @@ public final class RecipeIO {
     }
 
     /**
-     * JSON 文字列値内のエスケープを実体に戻す。
+     * JSON 文字列値内のエスケープを実体に戻すメソッド
      * @param s エスケープされた JSON 値
      * @return 復元後の文字列
      */

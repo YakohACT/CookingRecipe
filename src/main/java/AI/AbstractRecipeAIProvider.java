@@ -11,16 +11,15 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
- * 各AIプロバイダーの共通処理をまとめた抽象クラス。
- * プロンプト構築 / JSONエスケープ / レスポンスJSONのパースを提供する
+ * 各AIプロバイダーの共通処理をまとめた抽象クラス
  */
 public abstract class AbstractRecipeAIProvider {
 
     /**
-     * 各プロバイダー固有のAPIを呼び出してレシピ案を取得する。
+     * 各プロバイダー固有のAPIを呼び出してレシピ案を取得
      * @param apiKey         APIキー(Ollamaは未使用)
-     * @param modelName      モデル名(例: gpt-4.1, gemini-2.5-flash, llama3:8b 等)
-     * @param url            レシピ参照URL(YouTube/Webページ)
+     * @param modelName      モデル名
+     * @param url            レシピ参照URL
      * @param allIngredients 利用可能な食材リスト
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
      * @throws Exception API呼び出し/パース失敗時
@@ -28,9 +27,7 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception;
 
     /**
-     * 任意のプロンプトをモデルへ送り、モデルが返した本文(テキスト)をそのまま返す汎用呼び出し。
-     * レシピ生成以外の用途(食材の表記ゆれ検出など)で、JSONを期待する処理から利用する。
-     * 実装側はJSON出力を促す設定(json_object / responseMimeType など)を付与してよい。
+     * 任意のプロンプトをモデルへ送り、モデルが返した本文(テキスト)をそのまま返す汎用呼び出し
      * @param apiKey    APIキー(Ollamaは未使用)
      * @param modelName モデル名
      * @param prompt    送信するプロンプト本文
@@ -40,17 +37,16 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String chat(String apiKey, String modelName, String prompt) throws Exception;
 
     /**
-     * このプロバイダーで選択可能なモデル名の配列を返す(静的フォールバック)。
+     * このプロバイダーで選択可能なモデル名の配列を返す
      * @return モデル名配列
      */
     public abstract String[] getAvailableModels();
 
     /**
      * APIキーを使って動的にモデル一覧を取得する。
-     * デフォルト実装は {@link #getAvailableModels()} の静的フォールバックを返す。
-     * 各プロバイダーは必要に応じてオーバーライドしてHTTPリストAPIを叩く。
-     * 失敗時は静的フォールバックを返すこと(例外を呼び出し側へ漏らさない)。
-     * @param apiKey APIキー(Ollamaは未使用、null/空文字許容)
+     * デフォルト実装は {@link #getAvailableModels()} の静的フォールバックを返す
+     * 各プロバイダーは必要に応じてオーバーライドしてHTTPリストAPIを叩く
+     * @param apiKey APIキー(Ollamaは未使用)
      * @return 動的取得できたモデル名配列。失敗時はフォールバック
      */
     public String[] fetchAvailableModels(String apiKey) {
@@ -58,9 +54,9 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * 食材候補からレシピを提案させるプロンプトを構築する。
-     * 候補リストを先頭に置き、JSON形式での回答を強制する。
-     * @param url            参照URL(空文字許容)
+     * 食材候補からレシピを提案させるプロンプトを構築する
+     * 候補リストを先頭に置き、JSON形式での回答を強制
+     * @param url            参照URL
      * @param allIngredients 利用可能な食材リスト
      * @return AIへ送信するプロンプト文字列
      */
@@ -72,7 +68,6 @@ public abstract class AbstractRecipeAIProvider {
         boolean isYoutube = url.contains("youtube.com") || url.contains("youtu.be");
         // 参考情報の取得:
         //   - YouTube URL → oEmbedで動画タイトル + watchページから字幕を取得
-        //     (Geminiは別途file_dataで動画自体も渡すが、Ollama等の動画非対応モデルへの保険)
         //   - YouTube以外 → HTMLを取得してテキスト化(main.java.AI.WebPageFetcher)
         String pageText = "";
         if (!url.trim().isEmpty()) {
@@ -104,7 +99,6 @@ public abstract class AbstractRecipeAIProvider {
             if (!pageText.isEmpty()) {
                 sb.append("・上記の動画タイトル/字幕の料理を再現するように料理名と食材を選ぶこと\n");
             } else {
-                // タイトル/字幕が取れなかったケース: Gemini系の動画ネイティブ理解にフォールバック
                 sb.append("・動画の内容を参考にすること\n");
             }
         } else if (!pageText.isEmpty()) {
@@ -119,7 +113,7 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * APIレスポンスから抽出した text/content フィールドの中身(まだJSONエスケープ済み)を
-     * 解読し、{title, ingredients(カンマ連結)} の形に変換する。
+     * 解読し、{title, ingredients(カンマ連結)} の形に変換
      * @param escapedJsonText API応答内のJSON文字列(エスケープ済み)
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
      */
@@ -140,8 +134,8 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * "key":"value" 形式の文字列値を抽出する。
-     * @param text     検索対象のJSON文字列(unescape済み)
+     * "key":"value" 形式の文字列値を抽出する
+     * @param text     検索対象のJSON文字列
      * @param key      探したいキー名
      * @param fallback 見つからない場合のデフォルト値
      * @return 抽出した文字列値、または fallback
@@ -160,7 +154,7 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * "key":["v1","v2",...] 形式の文字列配列を抽出する。
+     * "key":["v1","v2",...] 形式の文字列配列を抽出する
      * @param text 検索対象のJSON文字列(unescape済み)
      * @param key  探したいキー名
      * @return 抽出した文字列配列(見つからなければ空配列)
@@ -187,10 +181,10 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * 文字列 s の指定位置以降でエスケープされていない最初の '"' を探す。
+     * 文字列 s の指定位置以降でエスケープされていない最初の '"' を探す
      * @param s   走査対象の文字列
      * @param pos 走査開始位置(この位置から探す)
-     * @return 見つかった '"' のインデックス。見つからなければ -1
+     * @return 見つかった '"' のインデックス。見つからなければ-1
      */
     protected static int findUnescapedQuote(String s, int pos) {
         while (pos < s.length()) {
@@ -206,9 +200,9 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * Java文字列をJSON文字列値として埋め込めるようエスケープする。
+     * Java文字列をJSON文字列値として埋め込めるようエスケープする
      * @param s 元の文字列
-     * @return JSON文字列値として安全な形にエスケープした文字列
+     * @return JSON文字列値としてエスケープした文字列
      */
     protected static String jsonEscape(String s) {
         StringBuilder sb = new StringBuilder(s.length() + 16);
@@ -234,7 +228,7 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * JSON文字列値内のエスケープを解除する({@code \"} → {@code "} など)。
+     * JSON文字列値内のエスケープを解除する({@code \"} → {@code "} など)
      * @param s エスケープされたJSON文字列値
      * @return 実体を復元した文字列
      */
@@ -276,8 +270,8 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * JSON 文字列内に出現する `"key":"value"` パターンの value をすべて収集する。
-     * モデル一覧API のように `[{"id":"..."},{"id":"..."},...]` の "id" を全件取りたい時に使う。
+     * JSON 文字列内に出現する `"key":"value"` パターンの value をすべて収集
+     * モデル一覧API のように `[{"id":"..."},{"id":"..."},...]` の "id" を全件取りたい時に使う
      * @param json 検索対象 JSON 文字列
      * @param key  対象キー名
      * @return 抽出された値のリスト(順序保持、unescape 済み)
@@ -304,7 +298,7 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * AIがプレースホルダや装飾を含めた場合のために角括弧・カギカッコ・先頭の箇条書き記号などを除去する。
+     * AIがプレースホルダや装飾を含めた場合のために角括弧・カギカッコ・先頭の箇条書き記号などを除去
      * @param s 元の文字列
      * @return 装飾を除去した文字列
      */
@@ -315,8 +309,8 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * InputStream を UTF-8 文字列として読み切る。
-     * 各プロバイダーが個別実装していたものを共通化したヘルパー。
+     * InputStream を UTF-8 文字列として読み切る
+     * 各プロバイダーが個別実装していたものを共通化したヘルパー
      * @param stream 入力ストリーム(null可)
      * @return ストリーム内容の文字列(null入力時は空文字)
      * @throws IOException 読み込み失敗時
@@ -333,9 +327,9 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * APIレスポンス全体から指定キーの文字列値を抜き出し、JSON文字列として
-     * {@link #parseJsonResponse(String)} に渡してパースする共通ヘルパー。
+     * {@link #parseJsonResponse(String)} に渡してパースする共通ヘルパー
      * OpenAI/Claude/Ollama のレスポンスはそれぞれ "content" / "text" フィールドに
-     * モデルが返したJSONが文字列としてエスケープされて入っているため、同じロジックで処理可能。
+     * モデルが返したJSONが文字列としてエスケープされて入っているため、同じロジックで処理可能
      * @param jsonRes      APIレスポンス全体のJSON文字列
      * @param contentKey   抜き出す対象キー名(例: "content", "text")
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
@@ -346,9 +340,9 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * APIレスポンス全体から指定キーの文字列値(モデル本文)を取り出し、unescapeして返す。
+     * APIレスポンス全体から指定キーの文字列値(モデル本文)を取り出し、unescapeして返す
      * {@link #extractAndParse} がレシピJSONとして解釈するのに対し、こちらは生のテキストを返すので
-     * 表記ゆれ検出など別形式のJSONを呼び出し側で自由にパースできる。
+     * 表記ゆれ検出など別形式のJSONを呼び出し側で自由にパースできる
      * @param jsonRes    APIレスポンス全体のJSON文字列
      * @param contentKey 抜き出す対象キー名(例: "content", "text")
      * @return モデル本文(unescape済み)
@@ -359,8 +353,8 @@ public abstract class AbstractRecipeAIProvider {
     }
 
     /**
-     * APIレスポンス全体から指定キーの文字列値(まだエスケープされた状態の部分文字列)を切り出す。
-     * {@link #extractAndParse} と {@link #extractRawContent} の共通の境界検出ロジック。
+     * APIレスポンス全体から指定キーの文字列値(まだエスケープされた状態の部分文字列)を切り出す
+     * {@link #extractAndParse} と {@link #extractRawContent} の共通の境界検出ロジック
      * @param jsonRes    APIレスポンス全体のJSON文字列
      * @param contentKey 抜き出す対象キー名
      * @return エスケープされたままの content 部分文字列

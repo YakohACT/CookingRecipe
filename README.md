@@ -14,7 +14,7 @@
 といったことがあり、作成。あと登録作業面倒だからAIに丸投げできるようにした。
 
 ## 前提条件
-- Windows または MacOS またはLinux OS
+- Windows または MacOS またはLinux OS (Android 版は `android/` ディレクトリ参照 → [Android](#android))
 - JDK17以降
 - Ollama
 - Ollamaの確認済みプロバイダ
@@ -105,6 +105,27 @@ pom.xml の依存を解決して `main.java.SwingMain` を Run。`lib/` の jar 
 ```
 java -jar RecipeManager.jar
 ```
+
+#### Android
+Android 版は `android/` ディレクトリに Gradle プロジェクトとして同梱しています。
+機能構成はデスクトップ版と同じで、UI は Android View で再実装しています (レシピDB `recipes.db` のスキーマは互換)。
+
+- **Android Studio**: `android/` フォルダをプロジェクトとして開き、実行ボタンでビルド・インストールできます
+- **コマンドライン** (要 JDK 17〜21 / Android SDK):
+  ```
+  cd android
+  gradlew assembleDebug        # Windows
+  ./gradlew assembleDebug      # macOS / Linux
+  ```
+  生成物: `android/build/outputs/apk/debug/RecipeManager-debug.apk`
+
+| 項目 | 内容 |
+|---|---|
+| 対応OS | Android 8.0 (API 26) 以上 |
+| データ保存先 | アプリ専用領域 (初回起動時に同梱の `database.csv` をコピー) |
+| APIキー | デスクトップ版と同様に暗号化して保存 |
+| Ollama | スマホ内では動かないため、同一LAN上のPCで `ollama serve` し、そのURL (例 `http://192.168.x.x:11434`) を AI設定画面で指定 |
+| Whisper | 外部バイナリ (yt-dlp / ffmpeg / whisper-cli) を実行できないため無効 (字幕・概要欄・Gemini の動画解析はそのまま利用可) |
 
 ---
 ## 使い方
@@ -250,5 +271,5 @@ UNIX 環境では `lib/tools/` にバイナリがなくても、PATH 上の `yt-
 
 #### 今後の予定
 
-- AndroidとかiOSとかで動かしたい\
+- ~~Androidとか~~iOSとかで動かしたい (Android 版は `android/` に統合済み)\
   ~iOSはJavaに対応してくれまじで頼むDartかSwiftでこれもう一つ作るん嫌すぎる勘弁してくれ~

@@ -4,9 +4,7 @@ import java.util.prefs.Preferences;
 
 /**
  * 各AIプロバイダー (OpenAI / Gemini / Claude) のAPIキーを
- * main.java.AI.SecureKeyStore で暗号化した上で Java Preferences に永続化する。
- *
- * Preferences のキー形式: "apiKey.<PROVIDER>" (例: apiKey.OPENAI)
+ * main.java.AI.SecureKeyStore で暗号化した上で Java Preferences に永続化
  */
 public class ApiKeyStore {
 
@@ -16,7 +14,7 @@ public class ApiKeyStore {
     private final Preferences prefs;
 
     /**
-     * 暗号化エンジンと永続化先 Preferences をDIする。
+     * 暗号化エンジンと永続化先 Preferences をDIする
      * @param secure 暗号化/復号を担う SecureKeyStore
      * @param prefs  保存先 Preferences ノード
      */

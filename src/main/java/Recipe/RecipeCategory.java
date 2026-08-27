@@ -1,9 +1,7 @@
 package main.java.Recipe;
 
 /**
- * レシピのカテゴリーを定義する列挙型。
- * 1つのレシピは複数のカテゴリーを持ちうる(例: 親子丼 = ごはんもの + 卵料理 + 肉料理 + 和食)。
- * UI表示には日本語ラベル、永続化には enum 名(英語)を使う
+ * レシピのカテゴリーを定義する列挙型
  */
 public enum RecipeCategory {
     RICE("ごはんもの"),
@@ -39,7 +37,7 @@ public enum RecipeCategory {
     }
 
     /**
-     * コンボボックス等で日本語表示するため displayName を返す。
+     * コンボボックスで日本語表示するためdisplayNameを返す
      * @return UI表示用の日本語ラベル
      */
     @Override

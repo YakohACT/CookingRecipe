@@ -16,41 +16,36 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
- * URLを1行ずつ列挙したテキストファイルを読み込み、各URLをAIに解析させて
- * レシピとして {@link AllRecipeList} へ登録するバッチ処理。
+ * URLを1行ずつ列挙したテキストファイルを読み込み、各URLをAIに解析するクラス
  *
- * - 空行・先頭が `#` のコメント行は無視
- * - 入力ファイル内で重複している URL は1回しか処理しない(順序は保持)
- * - 既に DB に登録済みの URL は AI 呼び出しをスキップ(無駄なAPIコール抑止)
- * - 1件ずつ順次AI呼び出し(レート制限への配慮 + 進捗表示しやすさ)
- * - タイトル/食材どちらも検出できなかったURLはスキップ(失敗カウント)
- * - 例外を投げるAPIエラーは握りつぶしてコンソールに出力し、後続URLの処理を続行
- *
- * Swing 側からは {@link #importAll} を非同期(SwingWorker等)で呼び出す想定。
+ * - 空行または先頭が#の行は無視
+ * - 既にDBに登録済みのURLはスキップ
+ * - 1件ずつ順次AI呼び出し
+ * - タイトル/食材どちらも検出できなかったURLはスキップ
  */
 public final class BatchUrlImporter {
 
-    /** 1件あたりの処理状態 */
+    /** 処理状態の列挙型 */
     public enum Status {
         /** AIへ問い合わせ中 */
         PROCESSING,
-        /** 登録に成功した */
+        /** 登録成功 */
         SUCCEEDED,
-        /** AI例外/検出失敗で登録できなかった */
+        /** AI例外処理 */
         FAILED,
-        /** URL重複(DB既登録 or 入力内重複)で AI を呼ばずにスキップ */
+        /** URL重複 */
         SKIPPED_DUPLICATE
     }
 
-    /** 1件のバッチ処理結果 */
+    /** バッチ処理結果を返すメソッド */
     public static final class Result {
-        /** 登録に成功した件数 */
+        /**成功数*/
         public final int succeeded;
-        /** 失敗または検出できなかった件数 */
+        /**失敗数*/
         public final int failed;
-        /** URL重複でスキップした件数(DB既登録) */
+        /**重複数*/
         public final int skipped;
-        /** 入力に含まれていた URL 総数(空行・コメント・ファイル内重複を除く) */
+        /**URL総数(ファイル内重複を除く)*/
         public final int total;
 
         public Result(int succeeded, int failed, int skipped, int total) {
@@ -61,9 +56,9 @@ public final class BatchUrlImporter {
         }
     }
 
-    /** 進捗通知用イベント。Swing側で進捗バー更新やステータス表示に利用する */
+    /** 進捗通知を行うメソッド */
     public static final class Progress {
-        /** 0始まりの処理中インデックス */
+        /** 処理中インデックス */
         public final int index;
         /** 全体URL数 */
         public final int total;
@@ -83,11 +78,10 @@ public final class BatchUrlImporter {
     private BatchUrlImporter() {}
 
     /**
-     * 指定ファイルから URL を読み込み、空行・コメント(#始まり)・重複を排除して返す。
-     * 同じ URL が複数行に出現しても1件としてだけ処理される(順序は最初の出現位置を維持)。
+     * ファイルからURLを読み込み、空行・コメント(#始まり)・重複を排除して返すメソッド
      * @param file 入力ファイル
-     * @return 重複排除済みURLリスト(順序保持)
-     * @throws IOException 読み込み失敗時
+     * @return 重複排除済みURLリスト
+     * @throws IOException 例外処理
      */
     public static List<String> readUrls(Path file) throws IOException {
         LinkedHashSet<String> uniq = new LinkedHashSet<>();
@@ -100,14 +94,14 @@ public final class BatchUrlImporter {
     }
 
     /**
-     * URLリストを順次処理してレシピとして登録する(同期)。
-     * 既に DB に同じ URL のレシピが登録されている場合は AI 呼び出しをスキップする。
-     * @param urls         処理対象URLリスト(重複排除済み想定。{@link #readUrls(Path)} の返り値を渡す)
-     * @param aiService    設定済みのAIサービス(setConfig済みであること)
-     * @param master       食材マスタ(未知の食材は OTHER で自動追加)
+     * URLリストを順次処理してレシピとして登録するメソッド
+     * 既に DB に同じ URL のレシピが登録されている場合はスキップする
+     * @param urls         処理対象URLリスト
+     * @param aiService    設定済みのAIサービス
+     * @param master       食材マスタ
      * @param recipeList   登録先のレシピリスト
-     * @param onProgress   進捗通知コールバック(null可)
-     * @param cancelCheck  キャンセル要求の問い合わせ(null可、true を返したら処理中止)
+     * @param onProgress   進捗通知コールバック
+     * @param cancelCheck  キャンセル要求の問い合わせ
      * @return 集計結果
      */
     public static Result importAll(List<String> urls,
@@ -116,8 +110,7 @@ public final class BatchUrlImporter {
                                    AllRecipeList recipeList,
                                    Consumer<Progress> onProgress,
                                    BooleanSupplier cancelCheck) {
-        // 開始時点で DB に登録済みの URL を集めておき、AI を呼び出さずにスキップ判定する。
-        // バッチ実行中の追加分も逐次セットへ反映するので、入力に同じURLが残っていても二重登録されない。
+        // 開始時点で DB に登録済みの URL を集めておき、AI を呼び出さずにスキップ判定
         Set<String> existingUrls = new HashSet<>();
         for (Recipe r : recipeList.getRecipeList()) {
             if (r.getUrl() != null && !r.getUrl().isEmpty()) existingUrls.add(r.getUrl());
@@ -131,7 +124,7 @@ public final class BatchUrlImporter {
             if (cancelCheck != null && cancelCheck.getAsBoolean()) break;
             String url = urls.get(i);
 
-            // === URL重複チェック: 既登録なら AI を呼ばずにスキップ ===
+            //URL重複チェック
             if (existingUrls.contains(url)) {
                 skipped++;
                 System.out.println("[BatchUrlImporter] 既登録のためスキップ: " + url);
@@ -173,12 +166,9 @@ public final class BatchUrlImporter {
     }
 
     /**
-     * AIの返却値 {@code [title, "ing1,ing2,..."]} と URL から Recipe を組み立てる。
-     * 食材はマスタ存在チェック → 無ければ OTHER カテゴリで自動追加。
-     * タイトル空 or 食材0件のときは null を返し、UI/呼び出し側で「検出失敗」扱いにする。
-     * カテゴリーは AI が返さないので {@link RecipeCategory#OTHER} 固定。
-     * @param result AIからの戻り値(2要素配列)
-     * @param url    元のURL(Recipeに格納)
+     * AIからの回答を処理するメソッド
+     * @param result AIからの戻り値
+     * @param url    元のURL
      * @param master 食材マスタ
      * @return 構築された Recipe。検出失敗時は null
      */

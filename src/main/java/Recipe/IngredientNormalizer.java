@@ -11,25 +11,23 @@ import java.util.Set;
 
 /**
  * 食材名の表記ゆれ(同じ食材が違う書き方で複数登録されている状態)を
- * AIに検出させ、正規名へ統一するためのドメイン処理。
+ * AIに検出させ、正規名へ統一するためのドメイン処理をするクラス
  *
- * 役割は3つ:
- *  1. {@link #buildPrompt(List)} … AIへ送る検出プロンプトを組み立てる
- *  2. {@link #parseGroups(String)} … AIが返したJSONを {@link VariantGroup} のリストへ変換する
- *  3. {@link #apply(List, IngredientMaster, AllRecipeList)} … 検出結果を食材マスタとレシピへ反映する
+ *  {@link #buildPrompt(List)}->AIへ送る検出プロンプトを組み立てる
+ *  {@link #parseGroups(String)}->AIが返したJSONを {@link VariantGroup} のリストへ変換する
+ *  {@link #apply(List, IngredientMaster, AllRecipeList)}->検出結果を食材マスタとレシピへ反映する
  *
- * AIの呼び出し自体は {@code RecipeAIService.detectIngredientVariants} が担当する。
- * (本クラスはAI実装に依存せず、文字列の入出力だけを扱う)
+ * AIの呼び出しは {@code RecipeAIService.detectIngredientVariants}
  */
 public final class IngredientNormalizer {
 
     /**
-     * 1つの表記ゆれグループ。{@code canonical} に統一し、{@code variants} を吸収する。
+     * 1つの表記ゆれグループ。{@code canonical} に統一し、{@code variants} を吸収する
      */
     public static final class VariantGroup {
         /** 統一後の正規名 */
         public final String canonical;
-        /** canonical に統一すべき別表記の一覧(canonical 自身は含めない) */
+        /** canonical に統一すべき別表記の一覧 */
         public final List<String> variants;
 
         /**
@@ -59,13 +57,12 @@ public final class IngredientNormalizer {
         }
     }
 
-    private IngredientNormalizer() {}
+    //private IngredientNormalizer() {}
 
     /**
-     * 表記ゆれ検出用のプロンプトを組み立てる。
-     * 既存の食材名リストだけを対象とし、正規名は必ずリスト内の表記から選ばせる。
-     * @param names 現在登録されている全食材名
-     * @return AIへ送るプロンプト
+     * 表記ゆれ検出用のプロンプトを組み立てるメソッド
+     * @param names 現在登録されている全ての食材名
+     * @return プロンプト
      */
     public static String buildPrompt(List<String> names) {
         StringBuilder sb = new StringBuilder();
@@ -91,11 +88,11 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * AIが返したJSON文字列を {@link VariantGroup} のリストへ変換する。
+     * AIが返したJSON文字列を {@link VariantGroup} のリストへ変換する
      * 期待形式: {@code {"groups":[{"canonical":"..","variants":["..",".."]}]}}。
      * 解析できない/groups が無い場合は空リストを返す。
-     * @param json AIの応答(クリーンなJSON文字列)
-     * @return 表記ゆれグループのリスト(空可)
+     * @param json AIからの回答
+     * @return 表記ゆれグループのリスト
      */
     public static List<VariantGroup> parseGroups(String json) {
         List<VariantGroup> result = new ArrayList<>();
@@ -127,14 +124,11 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * 検出結果を食材マスタとレシピへ反映する。
-     * 1) マスタ: 各 variant を削除し、canonical に集約(順序は維持)
-     * 2) レシピ: variant を使っているレシピの食材名を canonical へ置換(重複は除去)
-     * AIの幻覚に備え、canonical も variant も「現在マスタに存在する名前」のみ採用する。
+     * 検出結果を食材マスタとレシピへ反映するメソッド
      * @param groups     AIが検出した表記ゆれグループ
      * @param master     食材マスタ
      * @param recipeList 全レシピ
-     * @return 適用結果(統合数・更新レシピ数)
+     * @return 適用結果
      */
     public static ApplyResult apply(List<VariantGroup> groups, IngredientMaster master, AllRecipeList recipeList) {
         List<Ingredient> current = master.getAllIngredients();
@@ -156,7 +150,7 @@ public final class IngredientNormalizer {
         }
         if (toCanonical.isEmpty()) return new ApplyResult(0, 0);
 
-        // === 1. マスタを再構築(variant を畳み込み、順序を維持) ===
+        // マスタを再構築
         Map<String, Ingredient> byName = new HashMap<>();
         for (Ingredient ing : current) byName.put(ing.getName(), ing);
 
@@ -165,13 +159,13 @@ public final class IngredientNormalizer {
         for (Ingredient ing : current) {
             String name = ing.getName();
             String canon = toCanonical.getOrDefault(name, name);
-            if (!added.add(canon)) continue; // 既に追加済み(canonical重複)はスキップ
+            if (!added.add(canon)) continue; // 追加済みはスキップ
             Ingredient canonIng = byName.get(canon);
             rebuilt.add(canonIng != null ? canonIng : new Ingredient(canon, ing.getCategory()));
         }
         master.replaceAll(rebuilt);
 
-        // === 2. レシピの食材名を置換 ===
+        // レシピの食材名を置換
         Map<String, Ingredient> masterAfter = new HashMap<>();
         for (Ingredient ing : master.getAllIngredients()) masterAfter.put(ing.getName(), ing);
 
@@ -203,10 +197,10 @@ public final class IngredientNormalizer {
         return new ApplyResult(toCanonical.size(), updatedRecipes);
     }
 
-    // ---- 簡易JSONパーサ(本プロジェクトの他クラスと同様、外部ライブラリ非依存) ----
+    //簡易JSONパーサ
 
     /**
-     * "key":"value" 形式の文字列値を抽出する(unescape済みで返す)。
+     * "key":"value" 形式の文字列値を抽出するメソッド
      * @param obj 対象JSON
      * @param key キー名
      * @return 値。見つからなければ null
@@ -225,7 +219,7 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * "key":["v1","v2",…] 形式の文字列配列を抽出する。
+     * "key":["v1","v2",…] 形式の文字列配列を抽出するメソッド
      * @param obj 対象JSON
      * @param key キー名
      * @return 値リスト(キーが無ければ空)
@@ -251,7 +245,7 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * pos 以降でエスケープされていない最初の '"' を探す。
+     * pos 以降でエスケープされていない最初の '"' を探すメソッド
      * @param s   走査文字列
      * @param pos 開始位置
      * @return 位置。見つからなければ -1
@@ -267,12 +261,12 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * 開き括弧に対応する閉じ括弧を、文字列リテラルを除外して探す。
+     * 開き括弧に対応する閉じ括弧を、文字列リテラルを除外して探すメソッド
      * @param s     走査文字列
      * @param start 開き括弧の位置
      * @param open  開き括弧文字
      * @param close 閉じ括弧文字
-     * @return 対応する閉じ括弧の位置。見つからなければ -1
+     * @return 対応する閉じ括弧の位置。見つからなければ -1を返す
      */
     private static int findMatchingBracket(String s, int start, char open, char close) {
         int depth = 0;
@@ -295,7 +289,7 @@ public final class IngredientNormalizer {
     }
 
     /**
-     * JSON文字列値内のエスケープを実体へ戻す。
+     * JSON文字列値内のエスケープを実体へ戻すメソッド
      * @param s エスケープされた文字列
      * @return 復元後の文字列
      */
