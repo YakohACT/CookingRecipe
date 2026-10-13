@@ -208,33 +208,14 @@ public final class WhisperTranscriber {
     }
 
     /**
-     * whisper-cli を探す。バイナリ名のバリエーション(whisper-cli / whisper-cpp / 旧main)に対応。
+     * whisper-cli を探す。バイナリ名のバリエーション(whisper-cli / whisper-cpp)に対応。
      * @return 見つかった Path。見つからなければ null
      */
     private static Path locateWhisperCli() {
         Path p = locateTool("whisper-cli");
         if (p != null) return p;
         // Homebrew whisper-cpp フォーミュラなど別名で入る場合がある
-        p = locateTool("whisper-cpp");
-        if (p != null) return p;
-        // 古い whisper.cpp ビルドの "main" バイナリ。lib/tools/ のみ対象
-        // (UNIXの PATH 上の "main" は別物の可能性が高いので意図的に検索しない)
-        return locateBundledTool("main");
-    }
-
-    /**
-     * 同梱バイナリ(lib/tools/)のみを探す(PATHは見ない)。
-     * 名前が汎用的なバイナリ("main"等)で誤検出を避けたいときに使う。
-     * @param baseName ベース名
-     * @return 見つかった Path。見つからなければ null
-     */
-    private static Path locateBundledTool(String baseName) {
-        String exeName = executableName(baseName);
-        for (Path base : toolsDirCandidates()) {
-            Path p = base.resolve(exeName);
-            if (Files.exists(p)) return p.toAbsolutePath();
-        }
-        return null;
+        return locateTool("whisper-cpp");
     }
 
     /**

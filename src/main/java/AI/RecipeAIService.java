@@ -1,6 +1,5 @@
 package main.java.AI;
 
-import main.java.AI.Ollama.*;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.IngredientNormalizer;
 
@@ -12,7 +11,17 @@ import java.util.List;
  */
 public class RecipeAIService {
 
-    public enum Provider { OPENAI, GEMINI, CLAUDE, OLLAMA }
+    public enum Provider {
+        OPENAI, GEMINI, CLAUDE, OLLAMA;
+
+        /**
+         * このプロバイダーの利用にAPIキーが必要かを返す。
+         * @return APIキーが必要なら true(ローカルで動く Ollama のみ不要)
+         */
+        public boolean requiresApiKey() {
+            return this != OLLAMA;
+        }
+    }
 
     private Provider selectedProvider = Provider.OPENAI;
     private String apiKey = "";
@@ -39,15 +48,8 @@ public class RecipeAIService {
      * @throws Exception API呼び出し失敗時 / APIキー未設定時
      */
     public String[] suggestRecipe(String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        // OllamaはローカルLLMなのでAPIキー不要
-        if (selectedProvider != Provider.OLLAMA && (apiKey == null || apiKey.isEmpty())) {
-            throw new Exception("APIキーが設定されていない");
-        }
-
-        AbstractRecipeAIProvider aiProvider = createProvider(selectedProvider, modelName);
-
-        // modelName も一緒に渡す
-        return aiProvider.generateRecipe(apiKey, modelName, url, allIngredients);
+        ensureApiKey();
+        return createProvider(selectedProvider).generateRecipe(apiKey, modelName, url, allIngredients);
     }
 
     /**
@@ -58,30 +60,19 @@ public class RecipeAIService {
      * @throws Exception API呼び出し失敗時 / APIキー未設定時
      */
     public List<IngredientNormalizer.VariantGroup> detectIngredientVariants(List<String> ingredientNames) throws Exception {
-        if (selectedProvider != Provider.OLLAMA && (apiKey == null || apiKey.isEmpty())) {
-            throw new Exception("APIキーが設定されていない");
-        }
-        AbstractRecipeAIProvider aiProvider = createProvider(selectedProvider, modelName);
+        ensureApiKey();
         String prompt = IngredientNormalizer.buildPrompt(ingredientNames);
-        String json = aiProvider.chat(apiKey, modelName, prompt);
+        String json = createProvider(selectedProvider).chat(apiKey, modelName, prompt);
         return IngredientNormalizer.parseGroups(json);
     }
 
     /**
-     * 指定されたプロバイダーの利用可能なモデル一覧を取得する。
-     * Ollama の場合は全サブクラスのモデルを集約して返す
+     * 指定されたプロバイダーの静的なモデル一覧(フォールバック用)を取得する。
      * @param provider 対象のAIプロバイダー
      * @return モデル名の配列
      */
     public String[] getModelsForProvider(Provider provider) {
-        if (provider == Provider.OLLAMA) {
-            ArrayList<String> all = new ArrayList<>();
-            for (OllamaProvider p : ollamaSubclasses()) {
-                for (String m : p.getAvailableModels()) all.add(m);
-            }
-            return all.toArray(new String[0]);
-        }
-        return createProvider(provider, "").getAvailableModels();
+        return createProvider(provider).getAvailableModels();
     }
 
     /**
@@ -93,54 +84,30 @@ public class RecipeAIService {
      * @return モデル名配列
      */
     public String[] fetchModelsForProvider(Provider provider, String apiKey) {
-        if (provider == Provider.OLLAMA) {
-            // Ollamaは1回 /api/tags を叩けば全モデルが取れるのでサブクラス集約は不要
-            return new LlamaProvider().fetchAvailableModels(apiKey);
-        }
-        return createProvider(provider, "").fetchAvailableModels(apiKey);
+        return createProvider(provider).fetchAvailableModels(apiKey);
     }
 
     /**
-     * プロバイダー(と Ollama の場合は modelName)から具象クラスを生成する。
-     * @param provider  AIプロバイダー
-     * @param modelName Ollama の場合のサブクラス振り分けに使うモデル名
+     * APIキーが必要なプロバイダーでキーが未設定なら例外を投げる。
+     * @throws Exception APIキー未設定時
+     */
+    private void ensureApiKey() throws Exception {
+        if (selectedProvider.requiresApiKey() && (apiKey == null || apiKey.isEmpty())) {
+            throw new Exception("APIキーが設定されていない");
+        }
+    }
+
+    /**
+     * プロバイダーに対応する具象クラスを生成する。
+     * @param provider AIプロバイダー
      * @return 対応する具象 AbstractRecipeAIProvider
      */
-    private static AbstractRecipeAIProvider createProvider(Provider provider, String modelName) {
+    private static AbstractRecipeAIProvider createProvider(Provider provider) {
         switch (provider) {
             case GEMINI: return new GeminiProvider();
             case CLAUDE: return new ClaudeProvider();
-            case OLLAMA: return ollamaProviderForModel(modelName);
+            case OLLAMA: return new OllamaProvider();
             case OPENAI: default: return new OpenAIProvider();
         }
-    }
-
-    /**
-     * モデル名のプレフィックスで Ollama サブクラスを振り分ける。
-     * 不明なモデル名は {@link LlamaProvider} をフォールバックとして利用(API挙動は同じ)。
-     * @param modelName Ollamaモデル名(例: "gemma4:e2b")
-     * @return 対応する OllamaProvider サブクラスのインスタンス
-     */
-    private static OllamaProvider ollamaProviderForModel(String modelName) {
-        String lower = (modelName == null) ? "" : modelName.toLowerCase();
-        if (lower.startsWith("gemma"))                                  return new GemmaProvider();
-        if (lower.startsWith("mistral") || lower.startsWith("mixtral")) return new MistralProvider();
-        if (lower.startsWith("phi"))                                    return new PhiProvider();
-        if (lower.startsWith("qwen") || lower.startsWith("qwq")) return new QwenProvider();
-        return new LlamaProvider();
-    }
-
-    /**
-     * Ollama 系サブクラスの一覧(モデル列挙用)。
-     * @return 全サブクラスインスタンスの配列
-     */
-    private static OllamaProvider[] ollamaSubclasses() {
-        return new OllamaProvider[]{
-                new LlamaProvider(),
-                new GemmaProvider(),
-                new MistralProvider(),
-                new PhiProvider(),
-                new QwenProvider()
-        };
     }
 }

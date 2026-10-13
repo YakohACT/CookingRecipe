@@ -76,17 +76,14 @@ if exist lib\tools\whisper-cli.exe (
     if errorlevel 1 goto fail
     powershell -NoProfile -Command "Expand-Archive -Path 'whisper-bin.zip' -DestinationPath 'whisper-tmp' -Force"
     REM Layout in the zip: Release\whisper-cli.exe + DLLs (or top-level depending on version)
-    powershell -NoProfile -Command "Get-ChildItem -Path 'whisper-tmp' -Recurse | Where-Object { $_.Extension -in '.exe','.dll' } | Copy-Item -Destination 'lib\tools\' -Force"
+    REM Copy only whisper-cli.exe and the DLLs it needs (whisper.dll / ggml*.dll).
+    REM Other tools in the zip (server, stream, bench, SDL2.dll ...) are not used by the app.
+    powershell -NoProfile -Command "Get-ChildItem -Path 'whisper-tmp' -Recurse | Where-Object { $_.Name -eq 'whisper-cli.exe' -or $_.Name -eq 'whisper.dll' -or $_.Name -like 'ggml*.dll' } | Copy-Item -Destination 'lib\tools\' -Force"
     if not exist lib\tools\whisper-cli.exe (
-        echo [WARN] whisper-cli.exe not found - looking for legacy main.exe ...
-        if exist lib\tools\main.exe (
-            echo       found main.exe - using it as whisper-cli
-        ) else (
-            echo [ERROR] neither whisper-cli.exe nor main.exe present.
-            rmdir /s /q whisper-tmp
-            del whisper-bin.zip
-            goto fail
-        )
+        echo [ERROR] whisper-cli.exe not found in archive.
+        rmdir /s /q whisper-tmp
+        del whisper-bin.zip
+        goto fail
     )
     rmdir /s /q whisper-tmp
     del whisper-bin.zip

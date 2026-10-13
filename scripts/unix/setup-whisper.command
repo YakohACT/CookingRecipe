@@ -115,7 +115,7 @@ fi
 echo "[3/4] whisper-cli ..."
 if have whisper-cli || have whisper-cpp; then
     echo "       skip (already on PATH)"
-elif [ -x "lib/tools/whisper-cli" ] || [ -x "lib/tools/whisper-cpp" ] || [ -x "lib/tools/main" ]; then
+elif [ -x "lib/tools/whisper-cli" ] || [ -x "lib/tools/whisper-cpp" ]; then
     echo "       skip (already in lib/tools/)"
 else
     if [ "$OS" = "Darwin" ] && brew_install whisper-cpp; then

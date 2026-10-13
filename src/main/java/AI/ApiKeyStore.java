@@ -49,11 +49,4 @@ public class ApiKeyStore {
         String encrypted = secure.encrypt(plainKey);
         prefs.put(PREF_PREFIX + provider.name(), encrypted);
     }
-
-    /** 全プロバイダーのキーを削除する(テストや初期化用) */
-    public void clearAll() {
-        for (RecipeAIService.Provider p : RecipeAIService.Provider.values()) {
-            prefs.remove(PREF_PREFIX + p.name());
-        }
-    }
 }

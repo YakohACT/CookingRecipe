@@ -1,7 +1,6 @@
 package main.java.UI;
 
 import main.java.SwingMain;
-import main.java.AI.RecipeAIService;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.IngredientCategory;
 import main.java.Recipe.Recipe;
@@ -195,9 +194,7 @@ public class RegisterRecipePanel extends JPanel {
      * @param btnAi 押下されたAIボタン(処理中は無効化される)
      */
     private void requestAiSuggestion(JButton btnAi) {
-        // Ollama はローカルLLMなのでAPIキー不要。それ以外はAPIキー必須
-        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
-                && owner.getCurrentApiKey().isEmpty()) {
+        if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキーを入力してください");
             return;
         }
@@ -207,9 +204,8 @@ public class RegisterRecipePanel extends JPanel {
         SwingWorker<String[], Void> worker = new SwingWorker<>() {
             @Override
             protected String[] doInBackground() throws Exception {
-                RecipeAIService aiService = new RecipeAIService();
-                aiService.setConfig(owner.getCurrentAiProvider(), owner.getCurrentApiKey(), owner.getCurrentModelName());
-                return aiService.suggestRecipe(urlField.getText().trim(), owner.getIngredientMaster().getAllIngredients());
+                return owner.createAiService().suggestRecipe(
+                        urlField.getText().trim(), owner.getIngredientMaster().getAllIngredients());
             }
 
             @Override
@@ -241,28 +237,9 @@ public class RegisterRecipePanel extends JPanel {
      * @return 反映に成功すれば true、検出失敗時は false
      */
     private boolean applyAiResult(String[] result) {
-        String aiTitle = (result == null || result.length < 1 || result[0] == null) ? "" : result[0].trim();
-        String aiIngsRaw = (result == null || result.length < 2 || result[1] == null) ? "" : result[1];
-
-        ArrayList<Ingredient> matched = new ArrayList<>();
-        for (String aiIngName : aiIngsRaw.split(",")) {
-            String cleanName = aiIngName.trim();
-            if (cleanName.isEmpty()) continue;
-            Ingredient resolved = null;
-            for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) {
-                if (ing.getName().equals(cleanName)) {
-                    resolved = ing;
-                    break;
-                }
-            }
-            // AIが未知の食材を返した場合は OTHER カテゴリで自動的にマスタに追加
-            if (resolved == null) {
-                resolved = owner.getIngredientMaster().addIngredient(cleanName);
-            }
-            if (resolved != null && !matched.contains(resolved)) {
-                matched.add(resolved);
-            }
-        }
+        String aiTitle = result[0].trim();
+        // AIが未知の食材を返した場合は OTHER カテゴリで自動的にマスタに追加される
+        ArrayList<Ingredient> matched = owner.getIngredientMaster().resolveAll(result[1]);
 
         if (aiTitle.isEmpty() || matched.isEmpty()) {
             return false;
@@ -292,11 +269,11 @@ public class RegisterRecipePanel extends JPanel {
         ArrayList<Ingredient> ings = new ArrayList<>();
         for (int i = 0; i < selectedListModel.size(); i++) ings.add(selectedListModel.getElementAt(i));
 
+        // 未選択の場合は Recipe 側で OTHER になる
         EnumSet<RecipeCategory> categories = EnumSet.noneOf(RecipeCategory.class);
         for (RecipeCategory cat : categoryList.getSelectedValuesList()) {
             categories.add(cat);
         }
-        if (categories.isEmpty()) categories.add(RecipeCategory.OTHER);
 
         if (editTarget == null) {
             owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings, categories));

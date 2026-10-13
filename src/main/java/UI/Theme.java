@@ -8,7 +8,6 @@ import java.awt.Font;
  */
 public final class Theme {
     public static final Color COLOR_PRIMARY = new Color(52, 152, 219);
-    public static final Color COLOR_BG = new Color(245, 247, 250);
     public static final Color COLOR_SIDE = new Color(44, 62, 80);
     public static final Color COLOR_TEXT_LIGHT = Color.WHITE;
     public static final Color COLOR_DELETE = new Color(231, 76, 60);

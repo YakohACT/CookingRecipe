@@ -66,12 +66,11 @@ public class Recipe {
     public ArrayList<Ingredient> getIngredients() { return ingredients; }
 
     /**
-     * categories が null/空の場合は {@link RecipeCategory#OTHER} のみのSetを返すメソッド
+     * レシピカテゴリーを返すメソッド(コンストラクタで空なら OTHER が入るため、必ず1件以上ある)
      * 返り値は防御的コピーなので、変更しても本オブジェクトには影響しない。
      * @return レシピカテゴリー集合のコピー
      */
     public EnumSet<RecipeCategory> getCategories() {
-        if (categories == null || categories.isEmpty()) return EnumSet.of(RecipeCategory.OTHER);
         return EnumSet.copyOf(categories);
     }
 }

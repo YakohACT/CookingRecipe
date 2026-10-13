@@ -34,9 +34,10 @@ class SwingMain extends JFrame {
     + getApiKeyFor(p: Provider): String
     + setApiKeyFor(p: Provider, plainKey: String): void
     + getCurrentModelName(): String
-    + setCurrentModelName(m: String): void
     + getModelFor(p: Provider): String
     + setModelFor(p: Provider, model: String): void
+    + isAiReady(): boolean
+    + createAiService(): RecipeAIService
     + {static} main(args: String[]): void
 }
 
@@ -103,7 +104,6 @@ class SettingsPanel extends JPanel {
 
 class Theme <<utility>> {
     + {static} COLOR_PRIMARY: Color
-    + {static} COLOR_BG: Color
     + {static} COLOR_SIDE: Color
     + {static} COLOR_TEXT_LIGHT: Color
     + {static} COLOR_DELETE: Color
@@ -189,12 +189,13 @@ class Recipe {
 }
 
 class IngredientMaster {
-    - database: LinkedHashMap<Ingredient, String>
+    - {final} database: LinkedHashMap<String, Ingredient>
     + IngredientMaster()
     - loadCsv(): void
     - locateCsv(): File
     + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
     + getAllIngredients(): ArrayList<Ingredient>
+    + resolveAll(commaSeparatedNames: String): ArrayList<Ingredient>
     + replaceAll(ordered: List<Ingredient>): void
     - saveCsv(): void
     + addIngredient(name: String): Ingredient
@@ -219,13 +220,6 @@ class RecipeIO <<utility>> {
     - {static} serializeRecipe(r: Recipe, indent: String): String
     + {static} parseFromJson(json: String, ingredientMaster: IngredientMaster): List<Recipe>
     - {static} parseRecipe(obj: String, im: IngredientMaster): Recipe
-    - {static} lookupIngredient(im: IngredientMaster, name: String): Ingredient
-    - {static} extractJsonString(obj: String, key: String): String
-    - {static} extractJsonStringArray(obj: String, key: String): String[]
-    - {static} findUnescapedQuote(s: String, pos: int): int
-    - {static} findMatchingBracket(s: String, start: int, open: char, close: char): int
-    - {static} jsonEscape(s: String): String
-    - {static} jsonUnescape(s: String): String
 }
 
 class BatchUrlImporter <<utility>> {
@@ -267,6 +261,7 @@ class IngredientNormalizer <<utility>> {
     - IngredientNormalizer()
     + {static} buildPrompt(names: List<String>): String
     + {static} parseGroups(json: String): List<VariantGroup>
+    + {static} filterExisting(groups: List<VariantGroup>, master: IngredientMaster): List<VariantGroup>
     + {static} apply(groups: List<VariantGroup>, master: IngredientMaster, recipeList: AllRecipeList): ApplyResult
 }
 
@@ -283,7 +278,8 @@ class "IngredientNormalizer.ApplyResult" as ApplyResult {
 note right of IngredientNormalizer
   食材名の表記ゆれをAIで統一する処理。
   buildPrompt→(RecipeAIService.chat)→parseGroups で
-  検出し、apply でマスタとレシピを書き換える。
+  検出し、filterExisting で実在する名前に絞り込み、
+  apply でマスタとレシピを書き換える。
   AI実装には依存せず文字列入出力のみを扱う。
 end note
 
@@ -307,7 +303,6 @@ class RecipeRepository {
     + insert(recipe: Recipe): long
     + update(recipe: Recipe): void
     + delete(id: long): void
-    - lookupIngredient(name: String): Ingredient
 }
 
 class "RecipeRepository.RecipeBuilder" as RecipeBuilder {
@@ -321,6 +316,26 @@ class "RecipeRepository.RecipeBuilder" as RecipeBuilder {
 RecipeRepository +-- RecipeBuilder
 
 ' ===== ユーティリティ =====
+class JsonUtil <<utility>> {
+    - JsonUtil()
+    + {static} escape(s: String): String
+    + {static} unescape(s: String): String
+    + {static} extractString(json: String, key: String): String
+    + {static} extractStringArray(json: String, key: String): List<String>
+    + {static} extractObjectArray(json: String, key: String): List<String>
+    + {static} extractAllStrings(json: String, key: String): List<String>
+    + {static} findUnescapedQuote(s: String, pos: int): int
+    + {static} findMatchingBracket(s: String, start: int, open: char, close: char): int
+    - {static} findValueStart(json: String, key: String, from: int): int
+    - {static} skipWhitespace(s: String, pos: int): int
+}
+
+note right of JsonUtil
+  外部ライブラリを使わない簡易JSON処理。
+  AIレスポンス解析・レシピJSON入出力・
+  表記ゆれ結果の解析はすべてここを経由する。
+end note
+
 class WebPageFetcher <<utility>> {
     - {static} MAX_BYTES: int = 200_000
     - {static} MAX_TEXT_LENGTH: int = 3000
@@ -339,18 +354,16 @@ class YoutubeMetadataFetcher <<utility>> {
     - {static} MAX_TRANSCRIPT_LENGTH: int = 4000
     - {static} DESCRIPTION_SUFFICIENT_THRESHOLD: int = 150
     - YoutubeMetadataFetcher()
-    + {static} fetchSummary(url: String): String
+    ~ {static} isYoutubeUrl(url: String): boolean
     + {static} fetchSummary(url: String, ingredientNames: List<String>): String
     - {static} stripUrls(s: String): String
     - {static} containsAnyIngredient(text: String, ingredientNames: List<String>): boolean
     - {static} extractDescription(html: String): String
     - {static} extractTranscript(html: String): String
-    - {static} extractVideoId(url: String): String
+    ~ {static} extractVideoId(url: String): String
     - {static} fetchTitle(videoUrl: String): String
     - {static} parseTranscriptXml(xml: String): String
     - {static} httpGet(url: String, accept: String): String
-    - {static} findUnescapedQuote(s: String, pos: int): int
-    - {static} jsonUnescape(s: String): String
 }
 
 class WhisperTranscriber <<utility>> {
@@ -364,7 +377,6 @@ class WhisperTranscriber <<utility>> {
     - {static} locateTool(baseName: String): Path
     - {static} findOnSystemPath(exeName: String): Path
     - {static} locateWhisperCli(): Path
-    - {static} locateBundledTool(baseName: String): Path
     - {static} locateModel(): Path
     - {static} toolsDirCandidates(): Path[]
     - {static} modelDirCandidates(): Path[]
@@ -394,7 +406,6 @@ class ApiKeyStore {
     + ApiKeyStore(secure: SecureKeyStore, prefs: Preferences)
     + getKey(provider: Provider): String
     + setKey(provider: Provider, plainKey: String): void
-    + clearAll(): void
 }
 
 'AI制御層
@@ -407,9 +418,8 @@ class RecipeAIService {
     + detectIngredientVariants(names: List<String>): List<VariantGroup>
     + getModelsForProvider(provider: Provider): String[]
     + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
-    - {static} createProvider(provider: Provider, modelName: String): AbstractRecipeAIProvider
-    - {static} ollamaProviderForModel(modelName: String): OllamaProvider
-    - {static} ollamaSubclasses(): OllamaProvider[]
+    - ensureApiKey(): void
+    - {static} createProvider(provider: Provider): AbstractRecipeAIProvider
 }
 
 enum "RecipeAIService.Provider" as Provider {
@@ -417,37 +427,32 @@ enum "RecipeAIService.Provider" as Provider {
     GEMINI
     CLAUDE
     OLLAMA
+    --
+    + requiresApiKey(): boolean
 }
 
 abstract class AbstractRecipeAIProvider {
-    + {abstract} generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
     + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
     + {abstract} getAvailableModels(): String[]
+    + generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
     + fetchAvailableModels(apiKey: String): String[]
     # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
-    # parseJsonResponse(escapedJsonText: String): String[]
-    - extractJsonString(text: String, key: String, fallback: String): String
-    - extractJsonStringArray(text: String, key: String): String[]
-    # {static} findUnescapedQuote(s: String, pos: int): int
-    # {static} jsonEscape(s: String): String
-    # {static} jsonUnescape(s: String): String
-    # {static} extractAllJsonStrings(json: String, key: String): List<String>
-    # stripBrackets(s: String): String
+    # parseRecipeJson(text: String): String[]
+    - stripBrackets(s: String): String
     # {static} readStream(stream: InputStream): String
-    # extractAndParse(jsonRes: String, contentKey: String): String[]
-    # extractRawContent(jsonRes: String, contentKey: String): String
-    - extractContentField(jsonRes: String, contentKey: String): String
+    # extractContent(jsonRes: String, contentKey: String): String
 }
 
 note right of AbstractRecipeAIProvider
-  generateRecipe はレシピ生成専用。
   chat は任意プロンプト→モデル本文(JSON)を返す
-  汎用呼び出しで、表記ゆれ検出などに使う。
+  汎用呼び出しで、各具象が実装する。
+  generateRecipe は chat にレシピ用プロンプトを送り
+  parseRecipeJson で解析する共通実装。
+  動画を添付する Gemini のみオーバーライドする。
   各具象は post/buildBody でHTTPを共通化。
 end note
 
 class OpenAIProvider {
-    + generateRecipe(...): String[]
     + chat(apiKey, modelName, prompt): String
     + fetchAvailableModels(apiKey: String): String[]
     - {static} buildBody(modelName: String, prompt: String): String
@@ -461,48 +466,38 @@ class GeminiProvider {
     + chat(apiKey, modelName, prompt): String
     - postWithRetry(urlStr: String, json: String): String
     ~ {static} canonicalYoutubeUrl(url: String): String
-    - {static} extractYoutubeVideoId(url: String): String
     + fetchAvailableModels(apiKey: String): String[]
     + getAvailableModels(): String[]
 }
 
 class ClaudeProvider {
-    + generateRecipe(...): String[]
     + chat(apiKey, modelName, prompt): String
-    - {static} buildBody(modelName: String, prompt: String, maxTokens: int): String
+    - {static} buildBody(modelName: String, prompt: String): String
     - post(apiKey: String, body: String): String
     + fetchAvailableModels(apiKey: String): String[]
     + getAvailableModels(): String[]
 }
 
-abstract class OllamaProvider {
-    # {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
-    # {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
+class OllamaProvider {
+    - {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
+    - {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
     + fetchAvailableModels(apiKey: String): String[]
-    + generateRecipe(apiKey: String, modelName: String, url: String, ings: ArrayList<Ingredient>): String[]
     + chat(apiKey, modelName, prompt): String
     - post(modelName: String, prompt: String): String
+    + getAvailableModels(): String[]
 }
 
-class LlamaProvider {
-    + getAvailableModels(): String[]
-}
-class GemmaProvider {
-    + getAvailableModels(): String[]
-}
-class MistralProvider {
-    + getAvailableModels(): String[]
-}
-class PhiProvider {
-    + getAvailableModels(): String[]
-}
-class QwenProvider {
-    + getAvailableModels(): String[]
-}
+note right of OllamaProvider
+  モデルファミリ(Llama/Gemma/Mistral/Phi/Qwen等)で
+  APIの違いは無いため1クラスで全モデルを扱う。
+  getAvailableModels は Ollama 未起動時の
+  フォールバック(動作確認済みモデル一覧)。
+end note
 
 ' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
+SwingMain ..> RecipeAIService : createAiService で生成
 SwingMain o--> RegisterRecipePanel    : creates >
 SwingMain o--> ViewRecipePanel        : creates >
 SwingMain o--> DeleteRecipePanel      : creates >
@@ -562,7 +557,6 @@ RecipeRepository  ..> RecipeCategory   : stores enum name
 SwingMain        --> ApiKeyStore     : holds
 ApiKeyStore      --> SecureKeyStore  : delegates encryption
 SettingsPanel    ..> ApiKeyStore     : per-provider get/set
-RegisterRecipePanel ..> ApiKeyStore  : reads key for current provider
 
 ' --- AI層 ---
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
@@ -572,16 +566,18 @@ AbstractRecipeAIProvider ..> YoutubeMetadataFetcher : fetches YouTube title+tran
 YoutubeMetadataFetcher   ..> WhisperTranscriber : fallback when no captions
 AbstractRecipeAIProvider ..> Ingredient
 GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
+GeminiProvider      ..> YoutubeMetadataFetcher : 動画IDの抽出
+
+' --- JSON処理 ---
+AbstractRecipeAIProvider ..> JsonUtil
+YoutubeMetadataFetcher   ..> JsonUtil
+RecipeIO                 ..> JsonUtil
+IngredientNormalizer     ..> JsonUtil
 
 ' --- 継承 ---
 AbstractRecipeAIProvider <|-- OpenAIProvider
 AbstractRecipeAIProvider <|-- GeminiProvider
 AbstractRecipeAIProvider <|-- ClaudeProvider
 AbstractRecipeAIProvider <|-- OllamaProvider
-OllamaProvider <|-- LlamaProvider
-OllamaProvider <|-- GemmaProvider
-OllamaProvider <|-- MistralProvider
-OllamaProvider <|-- PhiProvider
-OllamaProvider <|-- QwenProvider
 
 @enduml

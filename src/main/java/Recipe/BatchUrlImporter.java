@@ -173,27 +173,9 @@ public final class BatchUrlImporter {
      * @return 構築された Recipe。検出失敗時は null
      */
     private static Recipe buildRecipe(String[] result, String url, IngredientMaster master) {
-        String title = (result == null || result.length < 1 || result[0] == null) ? "" : result[0].trim();
-        String ingsRaw = (result == null || result.length < 2 || result[1] == null) ? "" : result[1];
-
-        ArrayList<Ingredient> matched = new ArrayList<>();
-        for (String aiIngName : ingsRaw.split(",")) {
-            String cleanName = aiIngName.trim();
-            if (cleanName.isEmpty()) continue;
-            Ingredient resolved = null;
-            for (Ingredient ing : master.getAllIngredients()) {
-                if (ing.getName().equals(cleanName)) {
-                    resolved = ing;
-                    break;
-                }
-            }
-            if (resolved == null) {
-                resolved = master.addIngredient(cleanName);
-            }
-            if (resolved != null && !matched.contains(resolved)) {
-                matched.add(resolved);
-            }
-        }
+        String title = result[0].trim();
+        // 未知の食材は OTHER カテゴリで自動的にマスタに追加される
+        ArrayList<Ingredient> matched = master.resolveAll(result[1]);
 
         if (title.isEmpty() || matched.isEmpty()) return null;
         return new Recipe(title, url, matched, EnumSet.of(RecipeCategory.OTHER));

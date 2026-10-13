@@ -15,7 +15,8 @@ import java.util.List;
  * CSVから食材データを読み込み管理するクラス
  */
 public class IngredientMaster {
-    private LinkedHashMap<Ingredient, String> database;
+    /** 食材名 → 食材。CSVの並び順を保持する */
+    private final LinkedHashMap<String, Ingredient> database;
 
     /**
      * コンストラクタ
@@ -61,7 +62,8 @@ public class IngredientMaster {
                             + " 未知のカテゴリ '" + catStr + "' のためスキップ");
                     continue;
                 }
-                database.put(new Ingredient(name, cat), name);
+                // 同名の行が複数ある場合は先に出てきたものを採用する
+                database.putIfAbsent(name, new Ingredient(name, cat));
             }
         } catch (IOException e) {
             System.err.println("[IngredientMaster] CSV読み込みに失敗: " + e.getMessage());
@@ -111,18 +113,34 @@ public class IngredientMaster {
      */
     public ArrayList<Ingredient> searchIngredient(IngredientCategory category) {
         ArrayList<Ingredient> list = new ArrayList<>();
-        for (Ingredient ing : database.keySet()) {
+        for (Ingredient ing : database.values()) {
             if (ing.getCategory() == category) list.add(ing);
         }
         return list;
     }
 
     /**
-     * 全ての食材をCSVに書き出すメソッド
+     * 全ての食材を登録順で返すメソッド
      * @return 全食材のリスト
      */
     public ArrayList<Ingredient> getAllIngredients() {
-        return new ArrayList<>(database.keySet());
+        return new ArrayList<>(database.values());
+    }
+
+    /**
+     * カンマ区切りの食材名をマスタの食材に解決するメソッド
+     * 未登録の食材は OTHER カテゴリで追加し、同じ食材は1つにまとめる
+     * @param commaSeparatedNames "食材1,食材2,…" 形式の文字列(AIの提案結果など)
+     * @return 解決された食材のリスト(並び順は入力どおり)
+     */
+    public ArrayList<Ingredient> resolveAll(String commaSeparatedNames) {
+        ArrayList<Ingredient> result = new ArrayList<>();
+        if (commaSeparatedNames == null) return result;
+        for (String name : commaSeparatedNames.split(",")) {
+            Ingredient ing = addIngredient(name);
+            if (ing != null && !result.contains(ing)) result.add(ing);
+        }
+        return result;
     }
 
     /**
@@ -134,7 +152,7 @@ public class IngredientMaster {
         database.clear();
         for (Ingredient ing : ordered) {
             if (ing == null || ing.getName() == null || ing.getName().isEmpty()) continue;
-            database.put(ing, ing.getName());
+            database.putIfAbsent(ing.getName(), ing);
         }
         saveCsv();
     }
@@ -149,7 +167,7 @@ public class IngredientMaster {
         }
         try {
             List<String> lines = new ArrayList<>();
-            for (Ingredient ing : database.keySet()) {
+            for (Ingredient ing : database.values()) {
                 lines.add(ing.getCategory().name() + "," + ing.getName());
             }
             Files.write(csv.toPath(), lines, StandardCharsets.UTF_8);
@@ -160,9 +178,10 @@ public class IngredientMaster {
 
     /**
      * 食材を OTHER カテゴリで追加するメソッド
+     * 既に同名の食材があれば追加せずにそれを返すため、「名前から食材を引く(無ければ追加)」用途にも使える
      * メモリ上のマスタ・database.csv の両方に反映される
      * @param name 食材名
-     * @return 追加されたIngredient、空文字やnullの場合はnull
+     * @return 追加された(または既存の)Ingredient、空文字やnullの場合はnull
      */
     public Ingredient addIngredient(String name) {
         return addIngredient(name, IngredientCategory.OTHER);
@@ -170,21 +189,20 @@ public class IngredientMaster {
 
     /**
      * 食材を指定カテゴリで追加するメソッド
+     * 既に同名の食材があれば追加せずにそれを返す
      * メモリ上のマスタ・database.csvの両方に反映される
      * @param name     食材名
      * @param category 食材カテゴリ
-     * @return 追加されたIngredientクラス。空文字/null の場合は null
+     * @return 追加された(または既存の)Ingredient。空文字/null の場合は null
      */
     public Ingredient addIngredient(String name, IngredientCategory category) {
         if (name == null) return null;
         String trimmed = name.trim();
         if (trimmed.isEmpty()) return null;
-        // 既に同名の食材があればそれを返す(equalsは名前一致)
-        for (Ingredient existing : database.keySet()) {
-            if (existing.getName().equals(trimmed)) return existing;
-        }
+        Ingredient existing = database.get(trimmed);
+        if (existing != null) return existing;
         Ingredient newIng = new Ingredient(trimmed, category);
-        database.put(newIng, trimmed);
+        database.put(trimmed, newIng);
         appendToCsv(category, trimmed);
         return newIng;
     }

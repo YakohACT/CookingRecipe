@@ -1,12 +1,11 @@
 package main.java.AI;
 
-import main.java.Recipe.Ingredient;
+import main.java.Util.JsonUtil;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 
 /**
  * Anthropic Claude API との通信を担当するクラス。
@@ -15,32 +14,25 @@ import java.util.ArrayList;
 public class ClaudeProvider extends AbstractRecipeAIProvider {
 
     @Override
-    public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        String response = post(apiKey, buildBody(modelName, buildPrompt(url, allIngredients), 1024));
-        // content[0].text からモデルが返したJSON文字列を抽出してパース
-        return extractAndParse(response, "text");
-    }
-
-    @Override
     public String chat(String apiKey, String modelName, String prompt) throws Exception {
-        // 食材数が多いと出力も長くなるため max_tokens は広めに取る
-        return extractRawContent(post(apiKey, buildBody(modelName, prompt, 2048)), "text");
+        // content[0].text にモデルが返したテキストが入っている
+        return extractContent(post(apiKey, buildBody(modelName, prompt)), "text");
     }
 
     /**
      * Messages API のリクエストボディを組み立てる。
      * Claude側にJSONモードはないため、JSON出力はプロンプト側で強制する前提。
+     * 表記ゆれ検出では食材数に応じて出力が長くなるため max_tokens は広めに取る
      * @param modelName モデル名
      * @param prompt    ユーザープロンプト
-     * @param maxTokens 最大生成トークン
      * @return JSONリクエストボディ
      */
-    private static String buildBody(String modelName, String prompt, int maxTokens) {
+    private static String buildBody(String modelName, String prompt) {
         return "{"
                 + "\"model\":\"" + modelName + "\","
-                + "\"max_tokens\":" + maxTokens + ","
+                + "\"max_tokens\":2048,"
                 + "\"temperature\":0.3,"
-                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + jsonEscape(prompt) + "\"}]"
+                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + JsonUtil.escape(prompt) + "\"}]"
                 + "}";
     }
 
@@ -91,7 +83,7 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
             if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
 
             String body = readStream(conn.getInputStream());
-            java.util.List<String> ids = extractAllJsonStrings(body, "id");
+            java.util.List<String> ids = JsonUtil.extractAllStrings(body, "id");
             java.util.List<String> result = new java.util.ArrayList<>();
             for (String id : ids) {
                 if (id.startsWith("claude-") && !result.contains(id)) result.add(id);

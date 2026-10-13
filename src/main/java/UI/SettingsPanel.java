@@ -131,7 +131,7 @@ public class SettingsPanel extends JPanel {
         // Ollama はAPIキー不要なので、選択時はキー欄を丸ごと非表示にする
         Runnable applyKeyVisibility = () -> {
             RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-            boolean needsKey = (p != null && p != RecipeAIService.Provider.OLLAMA);
+            boolean needsKey = (p != null && p.requiresApiKey());
             keySection.setVisible(needsKey);
             keySection.revalidate();
             keySection.repaint();
@@ -169,7 +169,7 @@ public class SettingsPanel extends JPanel {
             owner.setCurrentAiProvider(selected);
             owner.setModelFor(selected, (String) modelCombo.getSelectedItem());
             // Ollama はキー不要なので保存スキップ
-            if (selected != RecipeAIService.Provider.OLLAMA) {
+            if (selected.requiresApiKey()) {
                 owner.setApiKeyFor(selected, new String(keyField.getPassword()).trim());
             }
             JOptionPane.showMessageDialog(this, "設定を保存しました");

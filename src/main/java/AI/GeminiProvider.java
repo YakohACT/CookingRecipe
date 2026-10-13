@@ -1,6 +1,7 @@
 package main.java.AI;
 
 import main.java.Recipe.Ingredient;
+import main.java.Util.JsonUtil;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -20,7 +21,7 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
         String cleanKey = apiKey.trim();
         String prompt = buildPrompt(url, allIngredients);
-        String safePrompt = jsonEscape(prompt);
+        String safePrompt = JsonUtil.escape(prompt);
 
         StringBuilder partsJson = new StringBuilder();
         partsJson.append("{\"text\":\"").append(safePrompt).append("\"}");
@@ -30,9 +31,9 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         // YouTube が返す text/html を「Unsupported MIME type」として弾くため必須。
         // また list= や index= 等の余計なクエリが付いていると INVALID_ARGUMENT になるので、
         // 動画IDだけ抜き出して canonical な watch?v=... URL に正規化する。
-        if (url != null && (url.contains("youtube.com") || url.contains("youtu.be"))) {
+        if (YoutubeMetadataFetcher.isYoutubeUrl(url)) {
             String canonical = canonicalYoutubeUrl(url.trim());
-            String safeUrl = jsonEscape(canonical);
+            String safeUrl = JsonUtil.escape(canonical);
             partsJson.append(",{\"file_data\":{\"mime_type\":\"video/mp4\",\"file_uri\":\"")
                      .append(safeUrl).append("\"}}");
         }
@@ -58,19 +59,19 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         String jsonRes = postWithRetry(urlStr, json);
 
         // candidates[0].content.parts[0].text からモデルが返したJSON文字列を抽出してパース
-        return extractAndParse(jsonRes, "text");
+        return parseRecipeJson(extractContent(jsonRes, "text"));
     }
 
     @Override
     public String chat(String apiKey, String modelName, String prompt) throws Exception {
         String cleanKey = apiKey.trim();
-        String safePrompt = jsonEscape(prompt);
+        String safePrompt = JsonUtil.escape(prompt);
         // レシピ生成と違い動画添付や固定スキーマは不要。JSON出力だけ促す
         String json = "{\"contents\":[{\"parts\":[{\"text\":\"" + safePrompt + "\"}]}],"
                 + "\"generationConfig\":{\"responseMimeType\":\"application/json\",\"temperature\":0.2}}";
         String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
                 + ":generateContent?key=" + URLEncoder.encode(cleanKey, StandardCharsets.UTF_8);
-        return extractRawContent(postWithRetry(urlStr, json), "text");
+        return extractContent(postWithRetry(urlStr, json), "text");
     }
 
     /**
@@ -117,34 +118,9 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
      * @return canonical な watch?v=... 形式 (失敗時は原文)
      */
     static String canonicalYoutubeUrl(String url) {
-        String videoId = extractYoutubeVideoId(url);
+        String videoId = YoutubeMetadataFetcher.extractVideoId(url);
         if (videoId == null) return url;
         return "https://www.youtube.com/watch?v=" + videoId;
-    }
-
-    /**
-     * YouTubeのURLから動画ID(11文字以上の英数記号)を抽出する。
-     * @param url 解析対象のURL
-     * @return 動画ID。抽出できなかった場合は null
-     */
-    private static String extractYoutubeVideoId(String url) {
-        // youtu.be/<id>
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "youtu\\.be/([A-Za-z0-9_-]{6,})").matcher(url);
-        if (m.find()) return m.group(1);
-        // youtube.com/shorts/<id>
-        m = java.util.regex.Pattern.compile(
-                "youtube\\.com/shorts/([A-Za-z0-9_-]{6,})").matcher(url);
-        if (m.find()) return m.group(1);
-        // youtube.com/embed/<id>
-        m = java.util.regex.Pattern.compile(
-                "youtube\\.com/embed/([A-Za-z0-9_-]{6,})").matcher(url);
-        if (m.find()) return m.group(1);
-        // ?v=<id> or &v=<id>
-        m = java.util.regex.Pattern.compile(
-                "[?&]v=([A-Za-z0-9_-]{6,})").matcher(url);
-        if (m.find()) return m.group(1);
-        return null;
     }
 
     /**
@@ -167,7 +143,7 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
             if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
 
             String body = readStream(conn.getInputStream());
-            java.util.List<String> names = extractAllJsonStrings(body, "name");
+            java.util.List<String> names = JsonUtil.extractAllStrings(body, "name");
             java.util.List<String> result = new java.util.ArrayList<>();
             for (String n : names) {
                 String stripped = n.startsWith("models/") ? n.substring("models/".length()) : n;

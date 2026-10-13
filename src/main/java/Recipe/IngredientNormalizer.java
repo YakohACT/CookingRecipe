@@ -1,5 +1,7 @@
 package main.java.Recipe;
 
+import main.java.Util.JsonUtil;
+
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -15,6 +17,7 @@ import java.util.Set;
  *
  *  {@link #buildPrompt(List)}->AIへ送る検出プロンプトを組み立てる
  *  {@link #parseGroups(String)}->AIが返したJSONを {@link VariantGroup} のリストへ変換する
+ *  {@link #filterExisting(List, IngredientMaster)}->マスタに実在する食材名だけに絞り込む(確認画面の表示用)
  *  {@link #apply(List, IngredientMaster, AllRecipeList)}->検出結果を食材マスタとレシピへ反映する
  *
  * AIの呼び出しは {@code RecipeAIService.detectIngredientVariants}
@@ -96,29 +99,38 @@ public final class IngredientNormalizer {
      */
     public static List<VariantGroup> parseGroups(String json) {
         List<VariantGroup> result = new ArrayList<>();
-        if (json == null) return result;
-
-        int gIdx = json.indexOf("\"groups\"");
-        if (gIdx < 0) return result;
-        int arrStart = json.indexOf("[", gIdx);
-        if (arrStart < 0) return result;
-        int arrEnd = findMatchingBracket(json, arrStart, '[', ']');
-        if (arrEnd < 0) return result;
-
-        int pos = arrStart + 1;
-        while (pos < arrEnd) {
-            int objStart = json.indexOf('{', pos);
-            if (objStart < 0 || objStart >= arrEnd) break;
-            int objEnd = findMatchingBracket(json, objStart, '{', '}');
-            if (objEnd < 0 || objEnd > arrEnd) break;
-
-            String obj = json.substring(objStart, objEnd + 1);
-            String canonical = extractString(obj, "canonical");
-            List<String> variants = extractStringArray(obj, "variants");
-            if (canonical != null && !canonical.isEmpty() && !variants.isEmpty()) {
-                result.add(new VariantGroup(canonical, variants));
+        for (String obj : JsonUtil.extractObjectArray(json, "groups")) {
+            String canonical = JsonUtil.extractString(obj, "canonical");
+            List<String> variants = new ArrayList<>();
+            for (String v : JsonUtil.extractStringArray(obj, "variants")) variants.add(v.trim());
+            if (canonical != null && !canonical.trim().isEmpty() && !variants.isEmpty()) {
+                result.add(new VariantGroup(canonical.trim(), variants));
             }
-            pos = objEnd + 1;
+        }
+        return result;
+    }
+
+    /**
+     * AIが返したグループを、現在のマスタに実在する食材名だけに絞り込むメソッド
+     * canonical が実在しないグループと、実在しない/canonical と同じ別表記は除外する
+     * @param groups AIが検出した表記ゆれグループ
+     * @param master 食材マスタ
+     * @return 統一を適用できるグループのリスト(別表記が1つも残らないグループは含まない)
+     */
+    public static List<VariantGroup> filterExisting(List<VariantGroup> groups, IngredientMaster master) {
+        Set<String> existing = new HashSet<>();
+        for (Ingredient ing : master.getAllIngredients()) existing.add(ing.getName());
+
+        List<VariantGroup> result = new ArrayList<>();
+        for (VariantGroup g : groups) {
+            if (g.canonical == null || !existing.contains(g.canonical)) continue;
+            List<String> variants = new ArrayList<>();
+            for (String v : g.variants) {
+                if (v != null && existing.contains(v) && !v.equals(g.canonical) && !variants.contains(v)) {
+                    variants.add(v);
+                }
+            }
+            if (!variants.isEmpty()) result.add(new VariantGroup(g.canonical, variants));
         }
         return result;
     }
@@ -131,24 +143,14 @@ public final class IngredientNormalizer {
      * @return 適用結果
      */
     public static ApplyResult apply(List<VariantGroup> groups, IngredientMaster master, AllRecipeList recipeList) {
-        List<Ingredient> current = master.getAllIngredients();
-        Set<String> existing = new HashSet<>();
-        for (Ingredient ing : current) existing.add(ing.getName());
-
-        // variant -> canonical のマップを、実在する名前だけで構築
+        // variant -> canonical のマップを、実在する名前だけで構築(重複指定は先勝ち)
         Map<String, String> toCanonical = new LinkedHashMap<>();
-        for (VariantGroup g : groups) {
-            if (g.canonical == null || !existing.contains(g.canonical)) continue;
-            for (String v : g.variants) {
-                if (v == null) continue;
-                String name = v.trim();
-                if (name.isEmpty() || name.equals(g.canonical)) continue;
-                if (!existing.contains(name)) continue;       // 実在しない別表記は無視
-                if (toCanonical.containsKey(name)) continue;   // 重複指定はスキップ
-                toCanonical.put(name, g.canonical);
-            }
+        for (VariantGroup g : filterExisting(groups, master)) {
+            for (String v : g.variants) toCanonical.putIfAbsent(v, g.canonical);
         }
         if (toCanonical.isEmpty()) return new ApplyResult(0, 0);
+
+        List<Ingredient> current = master.getAllIngredients();
 
         // マスタを再構築
         Map<String, Ingredient> byName = new HashMap<>();
@@ -195,134 +197,5 @@ public final class IngredientNormalizer {
         }
 
         return new ApplyResult(toCanonical.size(), updatedRecipes);
-    }
-
-    //簡易JSONパーサ
-
-    /**
-     * "key":"value" 形式の文字列値を抽出するメソッド
-     * @param obj 対象JSON
-     * @param key キー名
-     * @return 値。見つからなければ null
-     */
-    private static String extractString(String obj, String key) {
-        int keyIdx = obj.indexOf("\"" + key + "\"");
-        if (keyIdx < 0) return null;
-        int colon = obj.indexOf(":", keyIdx);
-        if (colon < 0) return null;
-        int valStart = obj.indexOf("\"", colon);
-        if (valStart < 0) return null;
-        valStart++;
-        int valEnd = findUnescapedQuote(obj, valStart);
-        if (valEnd < 0) return null;
-        return jsonUnescape(obj.substring(valStart, valEnd)).trim();
-    }
-
-    /**
-     * "key":["v1","v2",…] 形式の文字列配列を抽出するメソッド
-     * @param obj 対象JSON
-     * @param key キー名
-     * @return 値リスト(キーが無ければ空)
-     */
-    private static List<String> extractStringArray(String obj, String key) {
-        List<String> items = new ArrayList<>();
-        int keyIdx = obj.indexOf("\"" + key + "\"");
-        if (keyIdx < 0) return items;
-        int arrStart = obj.indexOf("[", keyIdx);
-        if (arrStart < 0) return items;
-        int arrEnd = findMatchingBracket(obj, arrStart, '[', ']');
-        if (arrEnd < 0) return items;
-        int pos = arrStart + 1;
-        while (pos < arrEnd) {
-            int strStart = obj.indexOf("\"", pos);
-            if (strStart < 0 || strStart >= arrEnd) break;
-            int strEnd = findUnescapedQuote(obj, strStart + 1);
-            if (strEnd < 0 || strEnd > arrEnd) break;
-            items.add(jsonUnescape(obj.substring(strStart + 1, strEnd)).trim());
-            pos = strEnd + 1;
-        }
-        return items;
-    }
-
-    /**
-     * pos 以降でエスケープされていない最初の '"' を探すメソッド
-     * @param s   走査文字列
-     * @param pos 開始位置
-     * @return 位置。見つからなければ -1
-     */
-    private static int findUnescapedQuote(String s, int pos) {
-        while (pos < s.length()) {
-            char c = s.charAt(pos);
-            if (c == '\\') { pos += 2; continue; }
-            if (c == '"') return pos;
-            pos++;
-        }
-        return -1;
-    }
-
-    /**
-     * 開き括弧に対応する閉じ括弧を、文字列リテラルを除外して探すメソッド
-     * @param s     走査文字列
-     * @param start 開き括弧の位置
-     * @param open  開き括弧文字
-     * @param close 閉じ括弧文字
-     * @return 対応する閉じ括弧の位置。見つからなければ -1を返す
-     */
-    private static int findMatchingBracket(String s, int start, char open, char close) {
-        int depth = 0;
-        boolean inString = false;
-        for (int i = start; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (inString) {
-                if (c == '\\') { i++; continue; }
-                if (c == '"') inString = false;
-                continue;
-            }
-            if (c == '"') { inString = true; continue; }
-            if (c == open) depth++;
-            else if (c == close) {
-                depth--;
-                if (depth == 0) return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * JSON文字列値内のエスケープを実体へ戻すメソッド
-     * @param s エスケープされた文字列
-     * @return 復元後の文字列
-     */
-    private static String jsonUnescape(String s) {
-        StringBuilder sb = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '\\' && i + 1 < s.length()) {
-                char next = s.charAt(i + 1);
-                switch (next) {
-                    case '\\': sb.append('\\'); i++; break;
-                    case '"':  sb.append('"');  i++; break;
-                    case '/':  sb.append('/');  i++; break;
-                    case 'n':  sb.append('\n'); i++; break;
-                    case 'r':  sb.append('\r'); i++; break;
-                    case 't':  sb.append('\t'); i++; break;
-                    case 'b':  sb.append('\b'); i++; break;
-                    case 'f':  sb.append('\f'); i++; break;
-                    case 'u':
-                        if (i + 5 < s.length()) {
-                            try {
-                                int code = Integer.parseInt(s.substring(i + 2, i + 6), 16);
-                                sb.append((char) code);
-                                i += 5;
-                            } catch (NumberFormatException e) { sb.append(c); }
-                        } else sb.append(c);
-                        break;
-                    default: sb.append(c);
-                }
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
     }
 }

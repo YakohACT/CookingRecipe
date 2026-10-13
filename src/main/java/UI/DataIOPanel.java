@@ -1,7 +1,6 @@
 package main.java.UI;
 
 import main.java.SwingMain;
-import main.java.AI.RecipeAIService;
 import main.java.Recipe.BatchUrlImporter;
 import main.java.Recipe.Recipe;
 import main.java.Recipe.RecipeIO;
@@ -154,8 +153,7 @@ public class DataIOPanel extends JPanel {
      */
     private void doBatchUrlImport(SwingMain owner) {
         // 1. AI 設定チェック (Ollama 以外は APIキー必須)
-        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
-                && owner.getCurrentApiKey().isEmpty()) {
+        if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this,
                     "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
                     "AI未設定", JOptionPane.WARNING_MESSAGE);
@@ -237,12 +235,8 @@ public class DataIOPanel extends JPanel {
         SwingWorker<BatchUrlImporter.Result, BatchUrlImporter.Progress> worker = new SwingWorker<>() {
             @Override
             protected BatchUrlImporter.Result doInBackground() {
-                RecipeAIService aiService = new RecipeAIService();
-                aiService.setConfig(owner.getCurrentAiProvider(),
-                        owner.getCurrentApiKey(),
-                        owner.getCurrentModelName());
                 return BatchUrlImporter.importAll(urls,
-                        aiService,
+                        owner.createAiService(),
                         owner.getIngredientMaster(),
                         owner.getAllRecipeList(),
                         this::publish,

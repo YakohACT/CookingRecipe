@@ -1,7 +1,6 @@
 package main.java.UI;
 
 import main.java.SwingMain;
-import main.java.AI.RecipeAIService;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.IngredientCategory;
 import main.java.Recipe.IngredientNormalizer;
@@ -12,9 +11,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 登録済み食材一覧を JTable で閲覧・編集する画面パネル。
@@ -211,8 +208,7 @@ public class IngredientMasterPanel extends JPanel {
         if (table.isEditing()) table.getCellEditor().stopCellEditing();
 
         // Ollama 以外は APIキー必須
-        if (owner.getCurrentAiProvider() != RecipeAIService.Provider.OLLAMA
-                && owner.getCurrentApiKey().isEmpty()) {
+        if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this,
                     "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
                     "AI未設定", JOptionPane.WARNING_MESSAGE);
@@ -248,11 +244,7 @@ public class IngredientMasterPanel extends JPanel {
         SwingWorker<List<IngredientNormalizer.VariantGroup>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<IngredientNormalizer.VariantGroup> doInBackground() throws Exception {
-                RecipeAIService svc = new RecipeAIService();
-                svc.setConfig(owner.getCurrentAiProvider(),
-                        owner.getCurrentApiKey(),
-                        owner.getCurrentModelName());
-                return svc.detectIngredientVariants(names);
+                return owner.createAiService().detectIngredientVariants(names);
             }
 
             @Override
@@ -281,19 +273,9 @@ public class IngredientMasterPanel extends JPanel {
      * @param groups AIが返した表記ゆれグループ
      */
     private void handleDetectedGroups(List<IngredientNormalizer.VariantGroup> groups) {
-        // 現在マスタに実在する名前だけに絞り込み、表示用に整形
-        Set<String> existing = new HashSet<>();
-        for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) existing.add(ing.getName());
-
-        List<IngredientNormalizer.VariantGroup> effective = new ArrayList<>();
-        for (IngredientNormalizer.VariantGroup g : groups) {
-            if (g.canonical == null || !existing.contains(g.canonical)) continue;
-            List<String> vs = new ArrayList<>();
-            for (String v : g.variants) {
-                if (v != null && existing.contains(v) && !v.equals(g.canonical)) vs.add(v);
-            }
-            if (!vs.isEmpty()) effective.add(new IngredientNormalizer.VariantGroup(g.canonical, vs));
-        }
+        // 現在マスタに実在する名前だけに絞り込んでから確認画面に表示する
+        List<IngredientNormalizer.VariantGroup> effective =
+                IngredientNormalizer.filterExisting(groups, owner.getIngredientMaster());
 
         if (effective.isEmpty()) {
             JOptionPane.showMessageDialog(this,

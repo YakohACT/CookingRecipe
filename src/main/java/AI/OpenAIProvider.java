@@ -1,12 +1,11 @@
 package main.java.AI;
 
-import main.java.Recipe.Ingredient;
+import main.java.Util.JsonUtil;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 
 /**
  * OpenAI ChatCompletions API との通信を担当するクラス。
@@ -15,15 +14,9 @@ import java.util.ArrayList;
 public class OpenAIProvider extends AbstractRecipeAIProvider {
 
     @Override
-    public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        String response = post(apiKey, buildBody(modelName, buildPrompt(url, allIngredients)));
-        // choices[0].message.content からモデルが返したJSON文字列を抽出してパース
-        return extractAndParse(response, "content");
-    }
-
-    @Override
     public String chat(String apiKey, String modelName, String prompt) throws Exception {
-        return extractRawContent(post(apiKey, buildBody(modelName, prompt)), "content");
+        // choices[0].message.content にモデルが返したテキストが入っている
+        return extractContent(post(apiKey, buildBody(modelName, prompt)), "content");
     }
 
     /**
@@ -38,7 +31,7 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
                 + "\"model\":\"" + modelName + "\","
                 + "\"response_format\":{\"type\":\"json_object\"},"
                 + "\"temperature\":0.3,"
-                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + jsonEscape(prompt) + "\"}]"
+                + "\"messages\":[{\"role\":\"user\",\"content\":\"" + JsonUtil.escape(prompt) + "\"}]"
                 + "}";
     }
 
@@ -88,7 +81,7 @@ public class OpenAIProvider extends AbstractRecipeAIProvider {
             if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
 
             String body = readStream(conn.getInputStream());
-            java.util.List<String> ids = extractAllJsonStrings(body, "id");
+            java.util.List<String> ids = JsonUtil.extractAllStrings(body, "id");
             java.util.List<String> filtered = new java.util.ArrayList<>();
             for (String id : ids) {
                 if (!isChatModel(id)) continue;

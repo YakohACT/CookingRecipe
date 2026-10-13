@@ -290,10 +290,22 @@ public class SwingMain extends JFrame {
     }
 
     /**
-     * 互換用: 現在のプロバイダーに対してモデルを保存する。
-     * @param m 保存するモデル名
+     * 現在のプロバイダーでAIを呼び出せる状態かを返す。
+     * @return APIキー不要のプロバイダー(Ollama)か、APIキーが設定済みなら true
      */
-    public void setCurrentModelName(String m) { setModelFor(currentAiProvider, m); }
+    public boolean isAiReady() {
+        return !currentAiProvider.requiresApiKey() || !getCurrentApiKey().isEmpty();
+    }
+
+    /**
+     * 現在のAI設定(プロバイダー・APIキー・モデル)を反映した RecipeAIService を生成する。
+     * @return 設定済みの RecipeAIService
+     */
+    public RecipeAIService createAiService() {
+        RecipeAIService service = new RecipeAIService();
+        service.setConfig(currentAiProvider, getCurrentApiKey(), getCurrentModelName());
+        return service;
+    }
 
     /**
      * アプリのエントリーポイント。Look&Feel を適用してから JFrame を生成・表示する。

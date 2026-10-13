@@ -12,6 +12,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * SQLiteを使ってレシピ保存するクラス
@@ -44,7 +45,7 @@ public class RecipeRepository {
         this.ingredientMaster = ingredientMaster;
         ensureSchema();
         // 実体ファイルが分かりにくいため、絶対パスをコンソールに表示する
-        System.out.println("[main.java.Recipe.RecipeRepository] SQLite DB: " + new java.io.File(dbPath).getAbsolutePath());
+        System.out.println("[RecipeRepository] SQLite DB: " + new java.io.File(dbPath).getAbsolutePath());
     }
 
     /**
@@ -67,11 +68,14 @@ public class RecipeRepository {
 
     /**
      * SQLite への新規 JDBC 接続を確立するメソッド
+     * SQLite の外部キー制約(ON DELETE CASCADE)は接続ごとに有効化が必要なため、毎回 ON で接続する
      * @return 開いた状態の接続(呼び出し側で close すること)
      * @throws SQLException 接続失敗時
      */
     private Connection connect() throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        Properties props = new Properties();
+        props.setProperty("foreign_keys", "true");
+        return DriverManager.getConnection("jdbc:sqlite:" + dbPath, props);
     }
 
     /**
@@ -79,7 +83,6 @@ public class RecipeRepository {
      */
     private void ensureSchema() {
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
-            stmt.execute("PRAGMA foreign_keys = ON");
             stmt.execute(
                     "CREATE TABLE IF NOT EXISTS recipes (" +
                     "  id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -140,7 +143,9 @@ public class RecipeRepository {
                 while (rs.next()) {
                     RecipeBuilder b = builders.get(rs.getLong("recipe_id"));
                     if (b == null) continue;
-                    b.ingredients.add(lookupIngredient(rs.getString("ingredient_name")));
+                    // マスタに無い食材名は OTHER で自動追加(database.csv にも書き込む)
+                    Ingredient ing = ingredientMaster.addIngredient(rs.getString("ingredient_name"));
+                    if (ing != null) b.ingredients.add(ing);
                 }
             }
         } catch (SQLException e) {
@@ -149,9 +154,8 @@ public class RecipeRepository {
 
         List<Recipe> result = new ArrayList<>();
         for (RecipeBuilder b : builders.values()) {
-            EnumSet<RecipeCategory> cats = b.categories.isEmpty()
-                    ? EnumSet.of(RecipeCategory.OTHER) : b.categories;
-            Recipe r = new Recipe(b.title, b.url, b.ingredients, cats);
+            // カテゴリーが空の場合は Recipe 側で OTHER になる
+            Recipe r = new Recipe(b.title, b.url, b.ingredients, b.categories);
             r.setId(b.id);
             result.add(r);
         }
@@ -213,7 +217,7 @@ public class RecipeRepository {
     public void update(Recipe recipe) {
         long id = recipe.getId();
         if (id <= 0) {
-            throw new IllegalArgumentException("main.java.Recipe.Recipe has no id; use insert() instead");
+            throw new IllegalArgumentException("Recipe has no id; use insert() instead");
         }
         try (Connection conn = connect()) {
             conn.setAutoCommit(false);
@@ -262,43 +266,17 @@ public class RecipeRepository {
 
     /**
      * 指定 id のレシピを削除するメソッド
+     * recipe_categories / recipe_ingredients の行は ON DELETE CASCADE で一緒に削除される
      * @param id 削除対象レシピのDBキー
      */
     public void delete(long id) {
-        try (Connection conn = connect()) {
-            conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM recipe_categories WHERE recipe_id = ?")) {
-                ps.setLong(1, id);
-                ps.executeUpdate();
-            }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM recipe_ingredients WHERE recipe_id = ?")) {
-                ps.setLong(1, id);
-                ps.executeUpdate();
-            }
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM recipes WHERE id = ?")) {
-                ps.setLong(1, id);
-                ps.executeUpdate();
-            }
-            conn.commit();
+        try (Connection conn = connect();
+             PreparedStatement ps = conn.prepareStatement("DELETE FROM recipes WHERE id = ?")) {
+            ps.setLong(1, id);
+            ps.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("レシピの削除に失敗: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 食材名から {@link IngredientMaster} を引いて {@link Ingredient} を返すメソッド
-     * マスタに存在しない場合は OTHER カテゴリで自動的にマスタ + database.csv に追加し、
-     * その Ingredient を返す。
-     * @param name 食材名
-     * @return 解決された Ingredient
-     */
-    private Ingredient lookupIngredient(String name) {
-        for (Ingredient ing : ingredientMaster.getAllIngredients()) {
-            if (ing.getName().equals(name)) return ing;
-        }
-        // マスタに無い場合は OTHER で自動追加(database.csv にも書き込む)
-        Ingredient added = ingredientMaster.addIngredient(name);
-        return (added != null) ? added : new Ingredient(name, IngredientCategory.OTHER);
     }
 
     /** 読み込み中の中間状態を保持する内部Builder */
