@@ -4,13 +4,14 @@ cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
 REM   Recipe Manager - launcher (no console window)
-REM   - Auto-builds the JAR on first run
+REM   - Auto-builds the JAR on first run, or when sources are newer than the JAR
 REM   - Launches the GUI via javaw (detached, no console)
 REM ----------------------------------------------------------------------
 
-if not exist "RecipeManager.jar" (
-    echo First-run setup: building...
-    call "%~dp0build.bat"
+call "%~dp0check-build.bat"
+if errorlevel 1 (
+    echo Building RecipeManager.jar...
+    call "%~dp0build.bat" nopause
     if errorlevel 1 exit /b 1
 )
 

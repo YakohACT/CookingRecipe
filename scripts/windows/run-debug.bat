@@ -7,9 +7,10 @@ REM   Recipe Manager - debug launcher (with console)
 REM   Use this when you need stdout/stderr for troubleshooting.
 REM ----------------------------------------------------------------------
 
-if not exist "RecipeManager.jar" (
-    echo RecipeManager.jar not found. Running build first...
-    call "%~dp0build.bat"
+call "%~dp0check-build.bat"
+if errorlevel 1 (
+    echo RecipeManager.jar is missing or older than the sources. Running build first...
+    call "%~dp0build.bat" nopause
     if errorlevel 1 exit /b 1
 )
 

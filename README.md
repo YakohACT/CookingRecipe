@@ -42,7 +42,7 @@ Ollama / llama.cpp が無くても動作しますが、AI機能はAPIキーを�
 ## 使い方
 ### 実行方法
 起動スクリプトは `scripts/` に OS 別のディレクトリで分けて格納しています。
-ダブルクリック起動が可能です(初回起動時はビルドが走るため少し時間がかかります)。
+ダブルクリック起動が可能です(初回起動時や、ソースを更新した後の起動時は自動でビルドが走るため少し時間がかかります)。
 
 ```
 scripts/
@@ -50,6 +50,7 @@ scripts/
 │   ├── run.bat
 │   ├── run-debug.bat
 │   ├── build.bat
+│   ├── check-build.bat   (run系から呼ばれる再ビルド要否の判定)
 │   └── setup-whisper.bat
 └── unix/       macOS / Linux 用 (.command)
     ├── run.command
@@ -68,6 +69,7 @@ scripts/
 | **`scripts/windows/run.bat`**           | アプリを起動（コンソール非表示）初回はWhisper、ytdlp、ffmpegを導入するか選択 |
 | **`scripts/windows/run-debug.bat`**     | コンソール付きで起動。エラー調査用                               |
 | **`scripts/windows/build.bat`**         | コンパイルして RecipeManager.jar を生成                   |
+| **`scripts/windows/check-build.bat`**   | JAR が無い/ソースより古いかを判定 (run.bat・run-debug.bat が自動で使用) |
 | **`scripts/windows/setup-whisper.bat`** | Whisper、ytdlp、ffmpegを導入                         |
 
 #### macOS

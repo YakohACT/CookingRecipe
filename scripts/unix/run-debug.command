@@ -5,12 +5,15 @@
 # ----------------------------------------------------------------------
 set -e
 
-# プロジェクトルートに移動 (このスクリプトは scripts/unix/ にある)
-cd "$(dirname "$0")/../.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if [ ! -f "RecipeManager.jar" ]; then
-    echo "RecipeManager.jar not found. Running build first..."
-    bash "$(dirname "$0")/../unix/build.command"
+# プロジェクトルートに移動 (このスクリプトは scripts/unix/ にある)
+cd "$SCRIPT_DIR/../.."
+
+# JAR が無い、またはソースが JAR より新しい場合はビルド
+if [ ! -f "RecipeManager.jar" ] || [ -n "$(find src -name '*.java' -newer RecipeManager.jar | head -n 1)" ]; then
+    echo "RecipeManager.jar is missing or older than the sources. Running build first..."
+    bash "$SCRIPT_DIR/build.command" nopause
 fi
 
 if ! command -v java >/dev/null 2>&1; then

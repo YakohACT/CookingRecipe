@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------
 #   Recipe Manager - launcher (macOS / Linux)
-#   - Auto-builds the JAR on first run
+#   - Auto-builds the JAR on first run, or when sources are newer than the JAR
 #   - Launches the GUI in the background
 # ----------------------------------------------------------------------
 set -e
 
-# プロジェクトルートに移動 (このスクリプトは scripts/unix/ にある)
-cd "$(dirname "$0")/../.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 初回実行時にビルド
-if [ ! -f "RecipeManager.jar" ]; then
-    echo "First-run setup: building..."
-    bash "$(dirname "$0")/../unix/build.command"
+# プロジェクトルートに移動 (このスクリプトは scripts/unix/ にある)
+cd "$SCRIPT_DIR/../.."
+
+# 初回実行時、またはソースが JAR より新しい場合にビルド
+if [ ! -f "RecipeManager.jar" ] || [ -n "$(find src -name '*.java' -newer RecipeManager.jar | head -n 1)" ]; then
+    echo "Building RecipeManager.jar..."
+    bash "$SCRIPT_DIR/build.command" nopause
 fi
 
 # JRE/JDK チェック

@@ -55,7 +55,8 @@ echo   - Double-click RecipeManager.jar (if associated with javaw)
 echo   - Or run.bat (recommended)
 echo ============================================================
 echo.
-pause
+REM When called from run.bat / run-debug.bat with "nopause", continue to launch without waiting
+if /i not "%~1"=="nopause" pause
 exit /b 0
 
 :fail

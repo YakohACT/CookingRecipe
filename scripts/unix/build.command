@@ -51,4 +51,7 @@ echo "  - Run with: ./scripts/unix/run.command"
 echo "  - Or: java -jar RecipeManager.jar"
 echo "============================================================"
 echo
-read -n 1 -s -r -p "Press any key to close..."
+# run.command などから "nopause" 付きで呼ばれた場合は、そのまま起動に進むため待たない
+if [ "$1" != "nopause" ]; then
+    read -n 1 -s -r -p "Press any key to close..."
+fi
