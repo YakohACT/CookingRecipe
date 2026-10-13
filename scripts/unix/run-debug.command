@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------
-#   Recipe Manager Pro - debug launcher (with console, macOS / Linux)
+#   Recipe Manager - debug launcher (with console, macOS / Linux)
 #   Use this when you need stdout/stderr for troubleshooting.
 # ----------------------------------------------------------------------
 set -e

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------
-#   Recipe Manager Pro - build script (macOS / Linux)
+#   Recipe Manager - build script (macOS / Linux)
 #   Compiles src/main/java recursively and produces RecipeManager.jar
 # ----------------------------------------------------------------------
 set -e

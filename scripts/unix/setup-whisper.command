@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------
-#   Recipe Manager Pro - Whisper transcription auto-setup (macOS / Linux)
+#   Recipe Manager - Whisper transcription auto-setup (macOS / Linux)
 #
 #   Downloads everything needed to transcribe YouTube videos locally
 #   when the original captions are missing:

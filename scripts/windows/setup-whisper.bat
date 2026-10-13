@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
-REM   Recipe Manager Pro - Whisper transcription auto-setup
+REM   Recipe Manager - Whisper transcription auto-setup
 REM
 REM   Downloads everything needed to transcribe YouTube videos locally
 REM   when the original captions are missing:

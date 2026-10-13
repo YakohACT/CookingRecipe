@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
-REM   Recipe Manager Pro - build script
+REM   Recipe Manager - build script
 REM   Compiles src/main/java recursively and produces RecipeManager.jar
 REM ----------------------------------------------------------------------
 

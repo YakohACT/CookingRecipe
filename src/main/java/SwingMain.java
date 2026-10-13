@@ -72,7 +72,7 @@ public class SwingMain extends JFrame {
 
         darkMode = "dark".equals(PREFS.get(PREF_THEME, "light"));
 
-        setTitle("Recipe Manager Pro");
+        setTitle("Recipe Manager");
         setSize(1000, 750);
         // add/update/delete のたびに即時SQL反映するため、終了時の保存処理は不要
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

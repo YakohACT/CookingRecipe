@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
-REM   main.java.Recipe.Recipe Manager Pro - debug launcher (with console)
+REM   Recipe Manager - debug launcher (with console)
 REM   Use this when you need stdout/stderr for troubleshooting.
 REM ----------------------------------------------------------------------
 

@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0..\..\"
 
 REM ----------------------------------------------------------------------
-REM   main.java.Recipe.Recipe Manager Pro - launcher (no console window)
+REM   Recipe Manager - launcher (no console window)
 REM   - Auto-builds the JAR on first run
 REM   - Launches the GUI via javaw (detached, no console)
 REM ----------------------------------------------------------------------

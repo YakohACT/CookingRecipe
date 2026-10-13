@@ -57,7 +57,7 @@ public final class IngredientNormalizer {
         }
     }
 
-    //private IngredientNormalizer() {}
+    private IngredientNormalizer() {}
 
     /**
      * 表記ゆれ検出用のプロンプトを組み立てるメソッド

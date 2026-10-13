@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------
-#   Recipe Manager Pro - launcher (macOS / Linux)
+#   Recipe Manager - launcher (macOS / Linux)
 #   - Auto-builds the JAR on first run
 #   - Launches the GUI in the background
 # ----------------------------------------------------------------------

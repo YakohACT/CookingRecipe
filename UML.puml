@@ -1,7 +1,7 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
-'  Recipe Manager Pro - 完全版クラス図 (private メンバーを含む全メンバー)
+'  Recipe Manager - 完全版クラス図 (private メンバーを含む全メンバー)
 '  ※ 実装(src/main/java 配下)と1:1で対応。
 '    匿名 SwingWorker / リスナー等のローカルクラスは図には含めない。
 
