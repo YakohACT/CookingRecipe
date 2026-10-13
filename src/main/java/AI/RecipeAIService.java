@@ -12,25 +12,26 @@ import java.util.List;
 public class RecipeAIService {
 
     public enum Provider {
-        OPENAI, GEMINI, CLAUDE, OLLAMA;
+        OPENAI, GEMINI, CLAUDE, OLLAMA, LLAMA_CPP;
 
         /**
          * このプロバイダーの利用にAPIキーが必要かを返す。
-         * @return APIキーが必要なら true(ローカルで動く Ollama のみ不要)
+         * @return APIキーが必要なら true(ローカルで動く Ollama / llama.cpp は不要)
          */
         public boolean requiresApiKey() {
-            return this != OLLAMA;
+            return this != OLLAMA && this != LLAMA_CPP;
         }
     }
 
     private Provider selectedProvider = Provider.OPENAI;
     private String apiKey = "";
     private String modelName = "";
+    private String llamaCppUrl = LlamaCppProvider.DEFAULT_URL;
 
     /**
      * 利用するプロバイダー・APIキー・モデル名を一括設定する。
      * @param provider  AIプロバイダー
-     * @param apiKey    APIキー(Ollamaは空文字でよい)
+     * @param apiKey    APIキー(ローカルLLMは空文字でよい)
      * @param modelName 利用モデル名
      */
     public void setConfig(Provider provider, String apiKey, String modelName) {
@@ -40,8 +41,16 @@ public class RecipeAIService {
     }
 
     /**
+     * llama.cpp(llama-server)の接続先URLを設定する。
+     * @param url llama-server のURL(例: http://localhost:9931)
+     */
+    public void setLlamaCppUrl(String url) {
+        this.llamaCppUrl = url;
+    }
+
+    /**
      * 設定済みプロバイダーへレシピ提案を依頼する。
-     * Ollama 以外で APIキー未設定の場合は例外を投げる。
+     * APIキーが必要なプロバイダーでキー未設定の場合は例外を投げる。
      * @param url            参照URL
      * @param allIngredients 利用可能な食材リスト
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
@@ -54,7 +63,7 @@ public class RecipeAIService {
 
     /**
      * 設定済みプロバイダーに、食材名の表記ゆれグループを検出させる。
-     * Ollama 以外で APIキー未設定の場合は例外を投げる。
+     * APIキーが必要なプロバイダーでキー未設定の場合は例外を投げる。
      * @param ingredientNames 現在登録されている全食材名
      * @return 表記ゆれグループのリスト(表記ゆれが無ければ空)
      * @throws Exception API呼び出し失敗時 / APIキー未設定時
@@ -77,10 +86,10 @@ public class RecipeAIService {
 
     /**
      * 動的にプロバイダのAPIへ問い合わせて利用可能なモデル一覧を取得する。
-     * Ollama は localhost:11434/api/tags、それ以外はプロバイダの models エンドポイントを叩く。
+     * Ollama は localhost:11434/api/tags、llama.cpp は localhost:8080/v1/models、それ以外はプロバイダの models エンドポイントを叩く。
      * 失敗時は各プロバイダの静的フォールバックが返る(例外は呼び出し側へ漏れない)。
      * @param provider 対象プロバイダー
-     * @param apiKey   APIキー(Ollamaは未使用、null/空文字許容)
+     * @param apiKey   APIキー(ローカルLLMは未使用、null/空文字許容)
      * @return モデル名配列
      */
     public String[] fetchModelsForProvider(Provider provider, String apiKey) {
@@ -102,11 +111,12 @@ public class RecipeAIService {
      * @param provider AIプロバイダー
      * @return 対応する具象 AbstractRecipeAIProvider
      */
-    private static AbstractRecipeAIProvider createProvider(Provider provider) {
+    private AbstractRecipeAIProvider createProvider(Provider provider) {
         switch (provider) {
             case GEMINI: return new GeminiProvider();
             case CLAUDE: return new ClaudeProvider();
             case OLLAMA: return new OllamaProvider();
+            case LLAMA_CPP: return new LlamaCppProvider(llamaCppUrl);
             case OPENAI: default: return new OpenAIProvider();
         }
     }

@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 /**
  * YouTube の動画メタデータ(タイトル + 字幕)をテキスト化するヘルパー。
- * Ollama や OpenAI など動画自体を見られないモデル向けに、
+ * Ollama / llama.cpp や OpenAI など動画自体を見られないモデル向けに、
  * AIプロンプトへ「テキスト化された動画コンテンツ」を注入するために使う。
  *
  * 取得方法:

@@ -18,7 +18,7 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * 任意のプロンプトをモデルへ送り、モデルが返した本文(テキスト)をそのまま返す汎用呼び出し
-     * @param apiKey    APIキー(Ollamaは未使用)
+     * @param apiKey    APIキー(ローカルLLMは未使用)
      * @param modelName モデル名
      * @param prompt    送信するプロンプト本文
      * @return モデルが返したテキスト(unescape済み。多くの場合JSON文字列)
@@ -36,7 +36,7 @@ public abstract class AbstractRecipeAIProvider {
      * URLを参考にレシピ案(料理名と食材)を生成する
      * レシピ用プロンプトを {@link #chat} で送り、返ったJSONを解析する。
      * 動画の添付など独自のリクエストが必要なプロバイダーはオーバーライドする
-     * @param apiKey         APIキー(Ollamaは未使用)
+     * @param apiKey         APIキー(ローカルLLMは未使用)
      * @param modelName      モデル名
      * @param url            レシピ参照URL
      * @param allIngredients 利用可能な食材リスト
@@ -51,7 +51,7 @@ public abstract class AbstractRecipeAIProvider {
      * APIキーを使って動的にモデル一覧を取得する。
      * デフォルト実装は {@link #getAvailableModels()} の静的フォールバックを返す
      * 各プロバイダーは必要に応じてオーバーライドしてHTTPリストAPIを叩く
-     * @param apiKey APIキー(Ollamaは未使用)
+     * @param apiKey APIキー(ローカルLLMは未使用)
      * @return 動的取得できたモデル名配列。失敗時はフォールバック
      */
     public String[] fetchAvailableModels(String apiKey) {
@@ -166,7 +166,7 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * APIレスポンス全体から、モデル本文が入っている指定キーの文字列値を取り出す
-     * OpenAI/Ollama は "content"、Claude/Gemini は "text" フィールドに
+     * OpenAI/Ollama/llama.cpp は "content"、Claude/Gemini は "text" フィールドに
      * モデルが返したテキストがエスケープされた文字列として入っている
      * @param jsonRes    APIレスポンス全体のJSON文字列
      * @param contentKey 抜き出す対象キー名(例: "content", "text")

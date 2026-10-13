@@ -1,6 +1,7 @@
 package main.java;
 
 import main.java.AI.ApiKeyStore;
+import main.java.AI.LlamaCppProvider;
 import main.java.AI.RecipeAIService;
 import main.java.AI.SecureKeyStore;
 import main.java.Recipe.AllRecipeList;
@@ -27,6 +28,7 @@ public class SwingMain extends JFrame {
 
     private static final Preferences PREFS = Preferences.userNodeForPackage(SwingMain.class);
     private static final String PREF_THEME = "theme";
+    private static final String PREF_LLAMA_CPP_URL = "llamaCppUrl";
 
     /** FlatLaf がクラスパスにあるかを起動時に判定 */
     private static final boolean FLATLAF_AVAILABLE;
@@ -290,8 +292,28 @@ public class SwingMain extends JFrame {
     }
 
     /**
+     * llama.cpp(llama-server)の接続先URLを返す。
+     * @return 保存済みURL。未設定なら {@link LlamaCppProvider#DEFAULT_URL}
+     */
+    public String getLlamaCppUrl() {
+        return PREFS.get(PREF_LLAMA_CPP_URL, LlamaCppProvider.DEFAULT_URL);
+    }
+
+    /**
+     * llama.cpp(llama-server)の接続先URLを保存する。空文字なら削除してデフォルトに戻す。
+     * @param url 保存するURL
+     */
+    public void setLlamaCppUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            PREFS.remove(PREF_LLAMA_CPP_URL);
+        } else {
+            PREFS.put(PREF_LLAMA_CPP_URL, url.trim());
+        }
+    }
+
+    /**
      * 現在のプロバイダーでAIを呼び出せる状態かを返す。
-     * @return APIキー不要のプロバイダー(Ollama)か、APIキーが設定済みなら true
+     * @return APIキー不要のプロバイダー(Ollama / llama.cpp)か、APIキーが設定済みなら true
      */
     public boolean isAiReady() {
         return !currentAiProvider.requiresApiKey() || !getCurrentApiKey().isEmpty();
@@ -304,6 +326,7 @@ public class SwingMain extends JFrame {
     public RecipeAIService createAiService() {
         RecipeAIService service = new RecipeAIService();
         service.setConfig(currentAiProvider, getCurrentApiKey(), getCurrentModelName());
+        service.setLlamaCppUrl(getLlamaCppUrl());
         return service;
     }
 

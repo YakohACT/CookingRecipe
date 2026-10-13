@@ -12,12 +12,13 @@ import java.util.Arrays;
 
 /**
  * AI利用設定画面パネル。
- * APIキーは OpenAI / Gemini / Claude / Ollama それぞれで個別に保存され、
+ * APIキーは OpenAI / Gemini / Claude それぞれで個別に保存され、
  * プロバイダーを切替えると該当プロバイダーの保存済みキーが復元される。
+ * llama.cpp 選択時は APIキーの代わりに llama-server のURLを設定する。
  *
  * モデル一覧は次のタイミングで API から動的取得する:
  *   - プロバイダー切替時
- *   - APIキーフィールドからフォーカスが外れた時(入力直後)
+ *   - APIキー / サーバーURLフィールドからフォーカスが外れた時(入力直後)
  *   - 「更新」ボタン押下時
  * 取得失敗時は各プロバイダーの静的フォールバックリストにフォールバックする。
  */
@@ -60,7 +61,7 @@ public class SettingsPanel extends JPanel {
         modelRow.add(refreshBtn, BorderLayout.EAST);
         form.add(modelRow);
 
-        // APIキー欄は Ollama 選択時に非表示にしたいので、ラベル+上の余白+入力欄を
+        // APIキー欄はローカルLLM(Ollama / llama.cpp)選択時に非表示にしたいので、ラベル+上の余白+入力欄を
         // 1つのコンテナにまとめて setVisible で一括制御できるようにする
         JPanel keySection = new JPanel();
         keySection.setLayout(new BoxLayout(keySection, BoxLayout.Y_AXIS));
@@ -77,6 +78,21 @@ public class SettingsPanel extends JPanel {
         keySection.add(keyField);
         form.add(keySection);
 
+        // llama.cpp 選択時だけ表示する llama-server のURL欄(バージョンによりデフォルトポートが異なるため設定可能にする)
+        JPanel urlSection = new JPanel();
+        urlSection.setLayout(new BoxLayout(urlSection, BoxLayout.Y_AXIS));
+        urlSection.setOpaque(false);
+        urlSection.setAlignmentX(Component.LEFT_ALIGNMENT);
+        urlSection.add(Box.createRigidArea(new Dimension(0, 15)));
+        JLabel urlLabel = new JLabel("llama-server のURL (起動時に表示されるアドレス。古いバージョンは http://localhost:8080):");
+        urlLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        urlSection.add(urlLabel);
+        JTextField urlField = UIComponents.createStyledTextField();
+        urlField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        urlField.setText(owner.getLlamaCppUrl());
+        urlSection.add(urlField);
+        form.add(urlSection);
+
         // ===== モデル一覧の動的取得 =====
         // ステップ1: 静的フォールバックを即時表示し、UIに何か出た状態にする
         // ステップ2: SwingWorkerで API を叩き、結果が帰ったらコンボの中身を差し替える
@@ -88,6 +104,7 @@ public class SettingsPanel extends JPanel {
             }
             // ステップ1: 静的リストを先に出す
             RecipeAIService service = new RecipeAIService();
+            service.setLlamaCppUrl(urlField.getText().trim());
             modelCombo.removeAllItems();
             for (String m : service.getModelsForProvider(p)) modelCombo.addItem(m);
             String saved = owner.getModelFor(p);
@@ -128,30 +145,32 @@ public class SettingsPanel extends JPanel {
             w.execute();
         };
 
-        // Ollama はAPIキー不要なので、選択時はキー欄を丸ごと非表示にする
-        Runnable applyKeyVisibility = () -> {
+        // ローカルLLMはAPIキー不要なので、選択時はキー欄を丸ごと非表示にする。URL欄は llama.cpp のときだけ表示
+        Runnable applySectionVisibility = () -> {
             RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-            boolean needsKey = (p != null && p.requiresApiKey());
-            keySection.setVisible(needsKey);
-            keySection.revalidate();
-            keySection.repaint();
+            keySection.setVisible(p != null && p.requiresApiKey());
+            urlSection.setVisible(p == RecipeAIService.Provider.LLAMA_CPP);
+            form.revalidate();
+            form.repaint();
         };
 
         // プロバイダー切替時にAPIキー欄の表示/中身を更新し、モデル一覧も再取得
         providerCombo.addActionListener(e -> {
             RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
             keyField.setText(p == null ? "" : owner.getApiKeyFor(p));
-            applyKeyVisibility.run();
+            applySectionVisibility.run();
             populateModels.run();
         });
 
-        // APIキー入力後フォーカスが外れたタイミングでモデル一覧を更新
-        keyField.addFocusListener(new FocusAdapter() {
+        // APIキー / URL 入力後フォーカスが外れたタイミングでモデル一覧を更新
+        FocusAdapter refreshOnFocusLost = new FocusAdapter() {
             @Override
             public void focusLost(FocusEvent e) {
                 populateModels.run();
             }
-        });
+        };
+        keyField.addFocusListener(refreshOnFocusLost);
+        urlField.addFocusListener(refreshOnFocusLost);
 
         // 更新ボタン
         refreshBtn.addActionListener(e -> populateModels.run());
@@ -159,7 +178,7 @@ public class SettingsPanel extends JPanel {
         // 初期表示
         RecipeAIService.Provider initial = (RecipeAIService.Provider) providerCombo.getSelectedItem();
         if (initial != null) keyField.setText(owner.getApiKeyFor(initial));
-        applyKeyVisibility.run();
+        applySectionVisibility.run();
         populateModels.run();
 
         form.add(Box.createRigidArea(new Dimension(0, 30)));
@@ -168,9 +187,12 @@ public class SettingsPanel extends JPanel {
             RecipeAIService.Provider selected = (RecipeAIService.Provider) providerCombo.getSelectedItem();
             owner.setCurrentAiProvider(selected);
             owner.setModelFor(selected, (String) modelCombo.getSelectedItem());
-            // Ollama はキー不要なので保存スキップ
+            // ローカルLLMはキー不要なので保存スキップ
             if (selected.requiresApiKey()) {
                 owner.setApiKeyFor(selected, new String(keyField.getPassword()).trim());
+            }
+            if (selected == RecipeAIService.Provider.LLAMA_CPP) {
+                owner.setLlamaCppUrl(urlField.getText());
             }
             JOptionPane.showMessageDialog(this, "設定を保存しました");
             owner.showWelcome();

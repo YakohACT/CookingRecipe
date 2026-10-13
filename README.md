@@ -16,7 +16,7 @@
 ## 前提条件
 - Windows または MacOS またはLinux OS (Android 版は `android/` ディレクトリ参照 → [Android](#android))
 - JDK17以降
-- Ollama
+- Ollama または llama.cpp (ローカルAIを使う場合)
 - Ollamaの確認済みプロバイダ
   - gemma4:e2b
   - gemma4:e4b
@@ -37,7 +37,7 @@
   - qwen3-vl:8b
 
 確認済みでないプロバイダも一般的なテキスト生成AIであれば動作します。\
-Ollamaが無くても動作しますが、AI機能はAPIキーを用いるものしか動作しなくなります。
+Ollama / llama.cpp が無くても動作しますが、AI機能はAPIキーを用いるものしか動作しなくなります。
 
 ## 使い方
 ### 実行方法
@@ -181,13 +181,15 @@ AIを登録している場合はURLを入力すると、自動的にタイトル
 ![RMP_AI.png](Photo/RMP_AI.png)
 
 レシピ登録で利用するAIの設定を行います。
-AIは4種類から選べます。
+AIは5種類から選べます。
 - ChatGPT
 - Gemini
 - Claude
 - Ollama
+- llama.cpp (`LLAMA_CPP`)
 
-ChatGPTとGeminiとClaudeはAPIキーを用いてオンライン上で、Ollamaはローカル環境で処理するものとなります。\
+ChatGPTとGeminiとClaudeはAPIキーを用いてオンライン上で、Ollamaとllama.cppはローカル環境で処理するものとなります。\
+llama.cppを選んだ場合は、APIキーの代わりに llama-server のURLを入力します(詳しくは[llama.cppを使う場合](#llamacppを使う場合)参照)。\
 AI設定は保存されます。 **APIキーは暗号化した状態で保存します。**
 
 ### レシピ管理
@@ -216,7 +218,7 @@ URLバッチ取り込みはtxtファイルに入力したURLを全て参照し�
 
 ### AIについて
 APIを使うものに関しては利用可能なトークン数に注意してください。~~石油王は気にしないでおk~~\
-Ollama利用するときは事前にOllamaを起動し、使いたいモデルをDLしてください。
+Ollama利用するときは事前にOllamaを起動し、使いたいモデルをDLしてください。llama.cppの場合は下記参照。
 また、モデルによってはデバイスのリソースを大量に取ってしまうため注意。~~石油王h(略)~~\
 目安として
 - メモリー8GB程度 → 2Bモデル
@@ -226,6 +228,21 @@ Ollama利用するときは事前にOllamaを起動し、使いたいモデル�
 
 ちなみに自分のM2MacBook(8GB)は2Bモデルで撃沈、デスクトップ(メモリー32GB+RTX4060)は4Bモデルは余裕で8Bは時間がかかる感じでした。\
 ローカルAIを使うならVRAM16GB以上は欲しいけど、最近高すぎてアップグレード前提で買ったPCそのまま放置。
+
+#### llama.cppを使う場合
+llama.cpp に付属の `llama-server` (OpenAI互換API) に接続します。事前に llama-server を起動しておいてください。
+
+```bash
+llama-server -m モデル.gguf -c 8192
+```
+
+- **AI設定でサーバーURLを指定します。** llama-server 起動時に表示される `listening on http://...` のアドレスを入力してください。
+  - デフォルトは `http://localhost:9931` (新しい llama.cpp のデフォルトポート)。古いバージョンは `http://localhost:8080`、`--port` を指定した場合はそのポートです。
+- モデルは「更新」ボタンで llama-server から取得した一覧から選びます。
+  - `-m` で1つのモデルを起動した場合は、そのモデルが表示されます。
+  - ルーターモード(`llama serve` や `--models-dir` 指定)の場合は、選んだモデルが初回リクエスト時に読み込まれます(初回は時間がかかります)。
+- 参考ページや字幕を含めるとプロンプトが長くなるため、コンテキスト長は `-c 8192` 以上を推奨します。
+- 推論(thinking)対応モデルでも、アプリからのリクエストでは思考を無効化して応答を速くしています(Qwen3 系など `enable_thinking` に対応したチャットテンプレートの場合)。
 
 ### Youtube動画を参照するときについて
 Youtube動画はタイトルと字幕と概要欄を利用します。

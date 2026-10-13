@@ -152,7 +152,7 @@ public class DataIOPanel extends JPanel {
      * @param owner 共有状態を持つフレーム
      */
     private void doBatchUrlImport(SwingMain owner) {
-        // 1. AI 設定チェック (Ollama 以外は APIキー必須)
+        // 1. AI 設定チェック (ローカルLLM以外は APIキー必須)
         if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this,
                     "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",

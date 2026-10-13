@@ -207,7 +207,7 @@ public class IngredientMasterPanel extends JPanel {
     private void detectAndUnifyVariants() {
         if (table.isEditing()) table.getCellEditor().stopCellEditing();
 
-        // Ollama 以外は APIキー必須
+        // ローカルLLM(Ollama / llama.cpp)以外は APIキー必須
         if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this,
                     "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
