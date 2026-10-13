@@ -155,7 +155,7 @@ public class DataIOPanel extends JPanel {
         // 1. AI 設定チェック (ローカルLLM以外は APIキー必須)
         if (!owner.isAiReady()) {
             JOptionPane.showMessageDialog(this,
-                    "先に「AI設定」メニューでプロバイダーとAPIキーを設定してください。",
+                    "先に「AI設定」メニューでプロバイダーとAPIキー(llama.cpp の場合はサーバーURL)を設定してください。",
                     "AI未設定", JOptionPane.WARNING_MESSAGE);
             return;
         }

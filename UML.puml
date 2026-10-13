@@ -423,7 +423,7 @@ class RecipeAIService {
     + detectIngredientVariants(names: List<String>): List<VariantGroup>
     + getModelsForProvider(provider: Provider): String[]
     + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
-    - ensureApiKey(): void
+    - ensureConfigured(): void
     - createProvider(provider: Provider): AbstractRecipeAIProvider
 }
 
@@ -494,7 +494,6 @@ class OllamaProvider {
 }
 
 class LlamaCppProvider {
-    + {static} DEFAULT_URL: String = "http://localhost:9931"
     - {final} baseUrl: String
     + LlamaCppProvider(baseUrl: String)
     ~ {static} normalizeUrl(url: String): String
@@ -507,7 +506,7 @@ class LlamaCppProvider {
 
 note right of LlamaCppProvider
   llama-server の OpenAI互換API(/v1/chat/completions)に接続。
-  URLはAI設定で変更可能(デフォルトポートは版により 9931 / 8080)。
+  URLはAI設定で入力(初回は空欄=未設定。ポートは版により 9931 / 8080)。
   model は /v1/models から選択(ルーターモードでは必須)。
   enable_thinking=false で推論モデルの思考を止める。
 end note

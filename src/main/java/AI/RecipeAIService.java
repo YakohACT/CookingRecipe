@@ -26,7 +26,7 @@ public class RecipeAIService {
     private Provider selectedProvider = Provider.OPENAI;
     private String apiKey = "";
     private String modelName = "";
-    private String llamaCppUrl = LlamaCppProvider.DEFAULT_URL;
+    private String llamaCppUrl = "";
 
     /**
      * 利用するプロバイダー・APIキー・モデル名を一括設定する。
@@ -42,7 +42,7 @@ public class RecipeAIService {
 
     /**
      * llama.cpp(llama-server)の接続先URLを設定する。
-     * @param url llama-server のURL(例: http://localhost:9931)
+     * @param url llama-server のURL(例: http://localhost:9931)。未設定なら空文字
      */
     public void setLlamaCppUrl(String url) {
         this.llamaCppUrl = url;
@@ -50,26 +50,26 @@ public class RecipeAIService {
 
     /**
      * 設定済みプロバイダーへレシピ提案を依頼する。
-     * APIキーが必要なプロバイダーでキー未設定の場合は例外を投げる。
+     * APIキー(llama.cpp はサーバーURL)が未設定の場合は例外を投げる。
      * @param url            参照URL
      * @param allIngredients 利用可能な食材リスト
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
-     * @throws Exception API呼び出し失敗時 / APIキー未設定時
+     * @throws Exception API呼び出し失敗時 / 未設定時
      */
     public String[] suggestRecipe(String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        ensureApiKey();
+        ensureConfigured();
         return createProvider(selectedProvider).generateRecipe(apiKey, modelName, url, allIngredients);
     }
 
     /**
      * 設定済みプロバイダーに、食材名の表記ゆれグループを検出させる。
-     * APIキーが必要なプロバイダーでキー未設定の場合は例外を投げる。
+     * APIキー(llama.cpp はサーバーURL)が未設定の場合は例外を投げる。
      * @param ingredientNames 現在登録されている全食材名
      * @return 表記ゆれグループのリスト(表記ゆれが無ければ空)
-     * @throws Exception API呼び出し失敗時 / APIキー未設定時
+     * @throws Exception API呼び出し失敗時 / 未設定時
      */
     public List<IngredientNormalizer.VariantGroup> detectIngredientVariants(List<String> ingredientNames) throws Exception {
-        ensureApiKey();
+        ensureConfigured();
         String prompt = IngredientNormalizer.buildPrompt(ingredientNames);
         String json = createProvider(selectedProvider).chat(apiKey, modelName, prompt);
         return IngredientNormalizer.parseGroups(json);
@@ -86,7 +86,7 @@ public class RecipeAIService {
 
     /**
      * 動的にプロバイダのAPIへ問い合わせて利用可能なモデル一覧を取得する。
-     * Ollama は localhost:11434/api/tags、llama.cpp は localhost:8080/v1/models、それ以外はプロバイダの models エンドポイントを叩く。
+     * Ollama は localhost:11434/api/tags、llama.cpp は設定したURLの /v1/models、それ以外はプロバイダの models エンドポイントを叩く。
      * 失敗時は各プロバイダの静的フォールバックが返る(例外は呼び出し側へ漏れない)。
      * @param provider 対象プロバイダー
      * @param apiKey   APIキー(ローカルLLMは未使用、null/空文字許容)
@@ -97,12 +97,16 @@ public class RecipeAIService {
     }
 
     /**
-     * APIキーが必要なプロバイダーでキーが未設定なら例外を投げる。
-     * @throws Exception APIキー未設定時
+     * 呼び出しに必要な設定が揃っていなければ例外を投げる。
+     * APIキーが必要なプロバイダーはキー、llama.cpp はサーバーURLが必要。
+     * @throws Exception APIキー / サーバーURL 未設定時
      */
-    private void ensureApiKey() throws Exception {
+    private void ensureConfigured() throws Exception {
         if (selectedProvider.requiresApiKey() && (apiKey == null || apiKey.isEmpty())) {
             throw new Exception("APIキーが設定されていない");
+        }
+        if (selectedProvider == Provider.LLAMA_CPP && (llamaCppUrl == null || llamaCppUrl.trim().isEmpty())) {
+            throw new Exception("llama.cpp のサーバーURLが設定されていない");
         }
     }
 

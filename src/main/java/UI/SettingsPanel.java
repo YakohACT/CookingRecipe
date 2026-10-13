@@ -78,13 +78,14 @@ public class SettingsPanel extends JPanel {
         keySection.add(keyField);
         form.add(keySection);
 
-        // llama.cpp 選択時だけ表示する llama-server のURL欄(バージョンによりデフォルトポートが異なるため設定可能にする)
+        // llama.cpp 選択時だけ表示する llama-server のURL欄
+        // (バージョンや起動オプションでポートが変わるため、初回は空欄にしてユーザーに入力してもらう)
         JPanel urlSection = new JPanel();
         urlSection.setLayout(new BoxLayout(urlSection, BoxLayout.Y_AXIS));
         urlSection.setOpaque(false);
         urlSection.setAlignmentX(Component.LEFT_ALIGNMENT);
         urlSection.add(Box.createRigidArea(new Dimension(0, 15)));
-        JLabel urlLabel = new JLabel("llama-server のURL (起動時に表示されるアドレス。古いバージョンは http://localhost:8080):");
+        JLabel urlLabel = new JLabel("llama-server のURL (起動時に表示される listening on のアドレス。例: http://localhost:9931):");
         urlLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         urlSection.add(urlLabel);
         JTextField urlField = UIComponents.createStyledTextField();

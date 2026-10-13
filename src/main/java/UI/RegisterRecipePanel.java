@@ -195,7 +195,7 @@ public class RegisterRecipePanel extends JPanel {
      */
     private void requestAiSuggestion(JButton btnAi) {
         if (!owner.isAiReady()) {
-            JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキーを入力してください");
+            JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキー(llama.cpp の場合はサーバーURL)を入力してください");
             return;
         }
         btnAi.setText("生成中...");
