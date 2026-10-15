@@ -134,7 +134,7 @@ public class RegisterRecipePanel extends JPanel {
             prefillFromRecipe(editTarget);
         }
 
-        add(new JScrollPane(form), BorderLayout.CENTER);
+        add(UIComponents.createScrollPane(form), BorderLayout.CENTER);
     }
 
     /**

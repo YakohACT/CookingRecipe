@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
  */
 public final class UIComponents {
 
+    /** スクロール1単位あたりの移動量(px)。ホイール1ノッチは通常3単位分動く */
+    private static final int SCROLL_UNIT_INCREMENT = 16;
+
     /**
      * 高さ35px・テーマフォントを設定済みの JTextField を生成する。
      * 右クリックメニューも自動的に取り付けられる。
@@ -110,8 +113,24 @@ public final class UIComponents {
             }
             return label;
         });
-        list.setPreferredSize(new Dimension(200, 0));
+        // 幅だけを固定する。setPreferredSize で高さまで固定すると、件数が多くても
+        // スクロールペイン内で一覧が伸びず、表示しきれないレシピまでスクロールできなくなる
+        list.setFixedCellWidth(200);
         return list;
+    }
+
+    /**
+     * フォームなどの通常パネルを包むスクロールペインを生成する。
+     * JPanel のように行の概念を持たない部品はスクロール量の既定値が1pxで、
+     * マウスホイール1ノッチで数ピクセルしか動かないため、移動量を設定する。
+     * @param view スクロールさせるパネル
+     * @return スクロール量を設定済みの JScrollPane
+     */
+    public static JScrollPane createScrollPane(JComponent view) {
+        JScrollPane scrollPane = new JScrollPane(view);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(SCROLL_UNIT_INCREMENT);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(SCROLL_UNIT_INCREMENT);
+        return scrollPane;
     }
 
     /**

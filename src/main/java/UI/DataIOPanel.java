@@ -89,7 +89,7 @@ public class DataIOPanel extends JPanel {
         summary.setFont(Theme.FONT_MAIN);
         UIComponents.addLeftAligned(form, summary);
 
-        add(new JScrollPane(form), BorderLayout.CENTER);
+        add(UIComponents.createScrollPane(form), BorderLayout.CENTER);
     }
 
     /**

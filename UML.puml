@@ -115,9 +115,11 @@ package "UI"{
     }
 
     class UIComponents <<utility>> {
+        - {static} SCROLL_UNIT_INCREMENT: int = 16
         + {static} createStyledTextField(): JTextField
         + {static} attachContextMenu(comp: JTextComponent): void
         + {static} createStyledRecipeList(model: DefaultListModel<Recipe>): JList<Recipe>
+        + {static} createScrollPane(view: JComponent): JScrollPane
         + {static} createDetailArea(): JEditorPane
         + {static} updateDetailArea(area: JEditorPane, recipe: Recipe): void
         - {static} escapeHtml(s: String): String
@@ -314,7 +316,7 @@ package "Recipe"{
     RecipeRepository +-- RecipeBuilder
 }
 
-package "JsonUtil"{
+package "Util"{
     class JsonUtil <<utility>> {
         - JsonUtil()
         + {static} escape(s: String): String

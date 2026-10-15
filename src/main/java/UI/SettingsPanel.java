@@ -200,6 +200,6 @@ public class SettingsPanel extends JPanel {
         });
         UIComponents.addLeftAligned(form, btnSave);
 
-        add(new JScrollPane(form), BorderLayout.CENTER);
+        add(UIComponents.createScrollPane(form), BorderLayout.CENTER);
     }
 }
