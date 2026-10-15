@@ -1,5 +1,6 @@
 package main.java.Recipe;
 
+import main.java.AI.RecipeAIService;
 import main.java.Util.JsonUtil;
 
 import java.util.ArrayList;
@@ -15,12 +16,9 @@ import java.util.Set;
  * 食材名の表記ゆれ(同じ食材が違う書き方で複数登録されている状態)を
  * AIに検出させ、正規名へ統一するためのドメイン処理をするクラス
  *
- *  {@link #buildPrompt(List)}->AIへ送る検出プロンプトを組み立てる
- *  {@link #parseGroups(String)}->AIが返したJSONを {@link VariantGroup} のリストへ変換する
+ *  {@link #detectVariants(RecipeAIService, List)}->検出プロンプトをAIへ送り、返ったJSONを {@link VariantGroup} のリストへ変換する
  *  {@link #filterExisting(List, IngredientMaster)}->マスタに実在する食材名だけに絞り込む(確認画面の表示用)
  *  {@link #apply(List, IngredientMaster, AllRecipeList)}->検出結果を食材マスタとレシピへ反映する
- *
- * AIの呼び出しは {@code RecipeAIService.detectIngredientVariants}
  */
 public final class IngredientNormalizer {
 
@@ -63,11 +61,22 @@ public final class IngredientNormalizer {
     private IngredientNormalizer() {}
 
     /**
+     * AIに食材名の表記ゆれグループを検出させるメソッド
+     * @param ai    設定済みのAIサービス
+     * @param names 現在登録されている全ての食材名
+     * @return 表記ゆれグループのリスト(表記ゆれが無ければ空)
+     * @throws Exception AI呼び出し失敗時 / AI未設定時
+     */
+    public static List<VariantGroup> detectVariants(RecipeAIService ai, List<String> names) throws Exception {
+        return parseGroups(ai.chat(buildPrompt(names)));
+    }
+
+    /**
      * 表記ゆれ検出用のプロンプトを組み立てるメソッド
      * @param names 現在登録されている全ての食材名
      * @return プロンプト
      */
-    public static String buildPrompt(List<String> names) {
+    private static String buildPrompt(List<String> names) {
         StringBuilder sb = new StringBuilder();
         sb.append("あなたは日本の料理データを整理する専門家です。\n");
         sb.append("以下は食材マスタに登録されている食材名の一覧です。\n");
@@ -97,7 +106,7 @@ public final class IngredientNormalizer {
      * @param json AIからの回答
      * @return 表記ゆれグループのリスト
      */
-    public static List<VariantGroup> parseGroups(String json) {
+    private static List<VariantGroup> parseGroups(String json) {
         List<VariantGroup> result = new ArrayList<>();
         for (String obj : JsonUtil.extractObjectArray(json, "groups")) {
             String canonical = JsonUtil.extractString(obj, "canonical");

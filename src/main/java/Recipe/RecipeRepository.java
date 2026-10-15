@@ -182,26 +182,7 @@ public class RecipeRepository {
                 }
             }
 
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO recipe_categories(recipe_id, category) VALUES (?, ?)")) {
-                for (RecipeCategory cat : recipe.getCategories()) {
-                    ps.setLong(1, id);
-                    ps.setString(2, cat.name());
-                    ps.executeUpdate();
-                }
-            }
-
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO recipe_ingredients(recipe_id, ingredient_name, sort_order) VALUES (?, ?, ?)")) {
-                int order = 0;
-                for (Ingredient ing : recipe.getIngredients()) {
-                    ps.setLong(1, id);
-                    ps.setString(2, ing.getName());
-                    ps.setInt(3, order++);
-                    ps.executeUpdate();
-                }
-            }
-
+            insertChildren(conn, id, recipe);
             conn.commit();
             return id;
         } catch (SQLException e) {
@@ -230,37 +211,49 @@ public class RecipeRepository {
                 ps.executeUpdate();
             }
 
+            // カテゴリーと食材は一旦消してから入れ直す
             try (PreparedStatement ps = conn.prepareStatement("DELETE FROM recipe_categories WHERE recipe_id = ?")) {
                 ps.setLong(1, id);
                 ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO recipe_categories(recipe_id, category) VALUES (?, ?)")) {
-                for (RecipeCategory cat : recipe.getCategories()) {
-                    ps.setLong(1, id);
-                    ps.setString(2, cat.name());
-                    ps.executeUpdate();
-                }
-            }
-
             try (PreparedStatement ps = conn.prepareStatement("DELETE FROM recipe_ingredients WHERE recipe_id = ?")) {
                 ps.setLong(1, id);
                 ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO recipe_ingredients(recipe_id, ingredient_name, sort_order) VALUES (?, ?, ?)")) {
-                int order = 0;
-                for (Ingredient ing : recipe.getIngredients()) {
-                    ps.setLong(1, id);
-                    ps.setString(2, ing.getName());
-                    ps.setInt(3, order++);
-                    ps.executeUpdate();
-                }
-            }
+            insertChildren(conn, id, recipe);
 
             conn.commit();
         } catch (SQLException e) {
             throw new RuntimeException("レシピ更新失敗: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * レシピのカテゴリーと食材を子テーブルへ挿入するメソッド(insert / update 共通)
+     * @param conn   トランザクション中の接続
+     * @param id     親レシピのDBキー
+     * @param recipe 保存するレシピ
+     * @throws SQLException 挿入失敗時
+     */
+    private void insertChildren(Connection conn, long id, Recipe recipe) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO recipe_categories(recipe_id, category) VALUES (?, ?)")) {
+            for (RecipeCategory cat : recipe.getCategories()) {
+                ps.setLong(1, id);
+                ps.setString(2, cat.name());
+                ps.executeUpdate();
+            }
+        }
+
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO recipe_ingredients(recipe_id, ingredient_name, sort_order) VALUES (?, ?, ?)")) {
+            int order = 0;
+            for (Ingredient ing : recipe.getIngredients()) {
+                ps.setLong(1, id);
+                ps.setString(2, ing.getName());
+                ps.setInt(3, order++);
+                ps.executeUpdate();
+            }
         }
     }
 

@@ -1,15 +1,16 @@
 package main.java.AI;
 
-import main.java.Recipe.Ingredient;
 import main.java.Util.JsonUtil;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.stream.Collectors;
+import java.util.List;
 
 /**
  * 各AIプロバイダーの共通処理をまとめた抽象クラス
@@ -38,13 +39,13 @@ public abstract class AbstractRecipeAIProvider {
      * 動画の添付など独自のリクエストが必要なプロバイダーはオーバーライドする
      * @param apiKey         APIキー(ローカルLLMは未使用)
      * @param modelName      モデル名
-     * @param url            レシピ参照URL
-     * @param allIngredients 利用可能な食材リスト
+     * @param url             レシピ参照URL
+     * @param ingredientNames 利用可能な食材名のリスト
      * @return [タイトル, "食材1,食材2,…"] の2要素配列
      * @throws Exception API呼び出し/解析失敗時
      */
-    public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        return parseRecipeJson(chat(apiKey, modelName, buildPrompt(url, allIngredients)));
+    public String[] generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
+        return parseRecipeJson(chat(apiKey, modelName, buildPrompt(url, ingredientNames)));
     }
 
     /**
@@ -61,14 +62,12 @@ public abstract class AbstractRecipeAIProvider {
     /**
      * 食材候補からレシピを提案させるプロンプトを構築する
      * 候補リストを先頭に置き、JSON形式での回答を強制
-     * @param url            参照URL
-     * @param allIngredients 利用可能な食材リスト
+     * @param url             参照URL
+     * @param ingredientNames 利用可能な食材名のリスト
      * @return AIへ送信するプロンプト文字列
      */
-    protected String buildPrompt(String url, ArrayList<Ingredient> allIngredients) {
-        String names = allIngredients.stream()
-                .map(Ingredient::getName)
-                .collect(Collectors.joining(", "));
+    protected String buildPrompt(String url, List<String> ingredientNames) {
+        String names = String.join(", ", ingredientNames);
 
         boolean isYoutube = YoutubeMetadataFetcher.isYoutubeUrl(url);
         // 参考情報の取得:
@@ -78,10 +77,7 @@ public abstract class AbstractRecipeAIProvider {
         if (!url.trim().isEmpty()) {
             if (isYoutube) {
                 // 概要欄に材料が記載されているか判定するため食材名リストを渡す
-                java.util.List<String> ingNames = allIngredients.stream()
-                        .map(Ingredient::getName)
-                        .collect(Collectors.toList());
-                pageText = YoutubeMetadataFetcher.fetchSummary(url, ingNames);
+                pageText = YoutubeMetadataFetcher.fetchSummary(url, ingredientNames);
             } else {
                 pageText = WebPageFetcher.fetchSummary(url);
             }
@@ -162,6 +158,76 @@ public abstract class AbstractRecipeAIProvider {
             while ((line = br.readLine()) != null) sb.append(line);
         }
         return sb.toString();
+    }
+
+    /**
+     * JSONボディをPOSTする接続を開き、ヘッダー設定とボディ送信まで済ませる。
+     * レスポンスの読み取りは {@link #readOk} で行う。
+     * @param url         送信先URL
+     * @param body        リクエストボディJSON
+     * @param connectMs   接続タイムアウト(ミリ秒)
+     * @param readMs      読み取りタイムアウト(ミリ秒)
+     * @param headerPairs 追加ヘッダーを「名前, 値, 名前, 値, …」の順で並べたもの
+     * @return ボディ送信済みの接続
+     * @throws IOException 接続/送信失敗時
+     */
+    protected static HttpURLConnection openJsonPost(String url, String body, int connectMs, int readMs,
+                                                    String... headerPairs) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        for (int i = 0; i + 1 < headerPairs.length; i += 2) {
+            conn.setRequestProperty(headerPairs[i], headerPairs[i + 1]);
+        }
+        conn.setConnectTimeout(connectMs);
+        conn.setReadTimeout(readMs);
+        conn.setDoOutput(true);
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(body.getBytes(StandardCharsets.UTF_8));
+        }
+        return conn;
+    }
+
+    /**
+     * HTTP 200 ならレスポンスボディを返し、それ以外はエラーボディを含めた例外を投げる。
+     * @param conn       リクエスト送信済みの接続
+     * @param errorLabel 例外メッセージの先頭(例: "OpenAI API エラー")
+     * @param hint       例外メッセージの末尾に付ける補足(不要なら空文字)
+     * @return レスポンスボディ文字列
+     * @throws Exception HTTP非200時
+     */
+    protected static String readOk(HttpURLConnection conn, String errorLabel, String hint) throws Exception {
+        int responseCode = conn.getResponseCode();
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            String errorBody = readStream(conn.getErrorStream());
+            throw new Exception(errorLabel + " (HTTP " + responseCode + "): " + errorBody + hint);
+        }
+        return readStream(conn.getInputStream());
+    }
+
+    /**
+     * GETリクエストを送り、HTTP 200 ならレスポンスボディを返す。
+     * モデル一覧の取得など、失敗してもフォールバックすればよい用途向け。
+     * @param url         取得先URL
+     * @param connectMs   接続タイムアウト(ミリ秒)
+     * @param readMs      読み取りタイムアウト(ミリ秒)
+     * @param headerPairs 追加ヘッダーを「名前, 値, 名前, 値, …」の順で並べたもの
+     * @return レスポンスボディ。HTTP非200や通信失敗時は null
+     */
+    protected static String httpGetOrNull(String url, int connectMs, int readMs, String... headerPairs) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            for (int i = 0; i + 1 < headerPairs.length; i += 2) {
+                conn.setRequestProperty(headerPairs[i], headerPairs[i + 1]);
+            }
+            conn.setConnectTimeout(connectMs);
+            conn.setReadTimeout(readMs);
+            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return null;
+            return readStream(conn.getInputStream());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

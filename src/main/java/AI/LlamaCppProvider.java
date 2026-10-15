@@ -2,11 +2,10 @@ package main.java.AI;
 
 import main.java.Util.JsonUtil;
 
-import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ローカルLLM llama.cpp の llama-server との通信を担当するクラス。
@@ -56,22 +55,15 @@ public class LlamaCppProvider extends AbstractRecipeAIProvider {
     @Override
     public String[] fetchAvailableModels(String apiKey) {
         if (baseUrl.isEmpty()) return getAvailableModels();
-        try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(baseUrl + "/v1/models").openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(2000);
-            conn.setReadTimeout(5000);
-            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
-            String body = readStream(conn.getInputStream());
-            // {"object":"list","data":[{"id":"model.gguf","object":"model",...}, ...]}
-            java.util.List<String> uniq = new java.util.ArrayList<>();
-            for (String id : JsonUtil.extractAllStrings(body, "id")) {
-                if (!id.isEmpty() && !uniq.contains(id)) uniq.add(id);
-            }
-            return uniq.isEmpty() ? getAvailableModels() : uniq.toArray(new String[0]);
-        } catch (Exception e) {
-            return getAvailableModels();
+        String body = httpGetOrNull(baseUrl + "/v1/models", 2000, 5000);
+        if (body == null) return getAvailableModels();
+
+        // {"object":"list","data":[{"id":"model.gguf","object":"model",...}, ...]}
+        List<String> uniq = new ArrayList<>();
+        for (String id : JsonUtil.extractAllStrings(body, "id")) {
+            if (!id.isEmpty() && !uniq.contains(id)) uniq.add(id);
         }
+        return uniq.isEmpty() ? getAvailableModels() : uniq.toArray(new String[0]);
     }
 
     @Override
@@ -110,28 +102,14 @@ public class LlamaCppProvider extends AbstractRecipeAIProvider {
         }
         HttpURLConnection conn;
         try {
-            conn = (HttpURLConnection) new URL(baseUrl + "/v1/chat/completions").openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(5000);
-            // ローカルLLMは生成が遅く、ルーターモードでは初回リクエスト時にモデルの読み込みも行うため長めに
-            conn.setReadTimeout(300000);
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(body.getBytes(StandardCharsets.UTF_8));
-            }
+            // ローカルLLMは生成が遅く、ルーターモードでは初回リクエスト時にモデルの読み込みも行うため読み取りタイムアウトは長めに
+            conn = openJsonPost(baseUrl + "/v1/chat/completions", body, 5000, 300000);
         } catch (ConnectException e) {
             throw new Exception("llama.cpp に接続できません。`llama-server` が " + baseUrl
                     + " で起動しているか、AI設定のサーバーURLを確認してください。", e);
         }
-
-        int responseCode = conn.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            String errorBody = readStream(conn.getErrorStream());
-            throw new Exception("llama.cpp API エラー (HTTP " + responseCode + "): " + errorBody
-                    + "\n(コンテキスト長不足の場合は llama-server を -c 8192 などで起動してください)");
-        }
-        return readStream(conn.getInputStream());
+        return readOk(conn, "llama.cpp API エラー",
+                "\n(コンテキスト長不足の場合は llama-server を -c 8192 などで起動してください)");
     }
 
     /**

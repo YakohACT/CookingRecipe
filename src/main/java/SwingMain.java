@@ -1,8 +1,6 @@
 package main.java;
 
-import main.java.AI.ApiKeyStore;
-import main.java.AI.RecipeAIService;
-import main.java.AI.SecureKeyStore;
+import main.java.AI.AiSettings;
 import main.java.Recipe.AllRecipeList;
 import main.java.Recipe.IngredientMaster;
 import main.java.UI.DataIOPanel;
@@ -26,7 +24,6 @@ public class SwingMain extends JFrame {
 
     private static final Preferences PREFS = Preferences.userNodeForPackage(SwingMain.class);
     private static final String PREF_THEME = "theme";
-    private static final String PREF_LLAMA_CPP_URL = "llamaCppUrl";
 
     /** FlatLaf がクラスパスにあるかを起動時に判定 */
     private static final boolean FLATLAF_AVAILABLE;
@@ -43,32 +40,22 @@ public class SwingMain extends JFrame {
 
     private final AllRecipeList allRecipeList;
     private final IngredientMaster ingredientMaster;
+    private final AiSettings aiSettings;
     private final JPanel centerPanel;
-    private final ApiKeyStore apiKeyStore;
-
-    private RecipeAIService.Provider currentAiProvider = RecipeAIService.Provider.OPENAI;
 
     private boolean darkMode;
     private JButton themeButton;
 
     /**
      * メインフレームを構築する。
-     * 食材マスタ・レシピDB・APIキーストアを順に初期化し、
-     * Preferences から前回のプロバイダー/テーマを復元してウェルカム画面を表示する。
+     * 食材マスタ・レシピDB・AI設定を順に初期化し、
+     * Preferences から前回のテーマを復元してウェルカム画面を表示する。
      */
     public SwingMain() {
         // IngredientMaster を先に初期化し、AllRecipeList(SQLite読込)の食材名解決に渡す
         ingredientMaster = new IngredientMaster();
         allRecipeList = new AllRecipeList(ingredientMaster);
-        apiKeyStore = new ApiKeyStore(new SecureKeyStore(), PREFS);
-
-        // 前回選択していたプロバイダーを復元
-        String savedProvider = PREFS.get("aiProvider", "");
-        if (!savedProvider.isEmpty()) {
-            try {
-                currentAiProvider = RecipeAIService.Provider.valueOf(savedProvider);
-            } catch (IllegalArgumentException ignore) {}
-        }
+        aiSettings = new AiSettings(PREFS);
 
         darkMode = "dark".equals(PREFS.get(PREF_THEME, "light"));
 
@@ -220,113 +207,9 @@ public class SwingMain extends JFrame {
     public IngredientMaster getIngredientMaster() { return ingredientMaster; }
 
     /**
-     * @return 現在選択中のAIプロバイダー
+     * @return AI利用設定(プロバイダー・APIキー・モデル等)
      */
-    public RecipeAIService.Provider getCurrentAiProvider() { return currentAiProvider; }
-
-    /**
-     * 現在のAIプロバイダーを切替えて Preferences に保存する。
-     * @param p 切替先のプロバイダー
-     */
-    public void setCurrentAiProvider(RecipeAIService.Provider p) {
-        this.currentAiProvider = p;
-        if (p != null) PREFS.put("aiProvider", p.name());
-    }
-
-    /**
-     * 現在選択中プロバイダーの復号済みAPIキーを返す。
-     * @return APIキー(未設定または復号失敗時は空文字)
-     */
-    public String getCurrentApiKey() { return apiKeyStore.getKey(currentAiProvider); }
-
-    /**
-     * 指定プロバイダーのAPIキー(復号済み)を返す。
-     * @param p 対象プロバイダー
-     * @return APIキー(未設定時は空文字)
-     */
-    public String getApiKeyFor(RecipeAIService.Provider p) { return apiKeyStore.getKey(p); }
-
-    /**
-     * 指定プロバイダーのAPIキーを暗号化して保存する(空文字なら削除)。
-     * @param p        対象プロバイダー
-     * @param plainKey 平文のAPIキー(空文字で削除)
-     */
-    public void setApiKeyFor(RecipeAIService.Provider p, String plainKey) { apiKeyStore.setKey(p, plainKey); }
-
-    /**
-     * 現在選択中プロバイダーの利用モデル名を返す。
-     * 保存値が無い場合はそのプロバイダーの先頭モデル(getAvailableModels()[0])にフォールバック。
-     * @return 利用モデル名(未設定時は先頭モデル)
-     */
-    public String getCurrentModelName() { return getModelFor(currentAiProvider); }
-
-    /**
-     * 指定プロバイダーで保存済みのモデル名を返す。
-     * @param p 対象プロバイダー
-     * @return 保存値があればそれ、無ければそのプロバイダーの先頭モデル
-     */
-    public String getModelFor(RecipeAIService.Provider p) {
-        if (p == null) return "";
-        String saved = PREFS.get("aiModel." + p.name(), "");
-        if (!saved.isEmpty()) return saved;
-        // 未設定のときはそのプロバイダーの最初の利用可能モデルにフォールバック
-        String[] models = new RecipeAIService().getModelsForProvider(p);
-        return models.length > 0 ? models[0] : "";
-    }
-
-    /**
-     * 指定プロバイダーの利用モデル名を保存する。空文字なら削除動作。
-     * @param p     対象プロバイダー
-     * @param model 保存するモデル名(空文字で削除)
-     */
-    public void setModelFor(RecipeAIService.Provider p, String model) {
-        if (p == null) return;
-        if (model == null || model.isEmpty()) {
-            PREFS.remove("aiModel." + p.name());
-        } else {
-            PREFS.put("aiModel." + p.name(), model);
-        }
-    }
-
-    /**
-     * llama.cpp(llama-server)の接続先URLを返す。
-     * @return 保存済みURL。未設定(初回起動時)なら空文字
-     */
-    public String getLlamaCppUrl() {
-        return PREFS.get(PREF_LLAMA_CPP_URL, "");
-    }
-
-    /**
-     * llama.cpp(llama-server)の接続先URLを保存する。空文字なら削除して未設定に戻す。
-     * @param url 保存するURL
-     */
-    public void setLlamaCppUrl(String url) {
-        if (url == null || url.trim().isEmpty()) {
-            PREFS.remove(PREF_LLAMA_CPP_URL);
-        } else {
-            PREFS.put(PREF_LLAMA_CPP_URL, url.trim());
-        }
-    }
-
-    /**
-     * 現在のプロバイダーでAIを呼び出せる状態かを返す。
-     * @return llama.cpp はサーバーURL、APIキーが必要なプロバイダーはキーが設定済みなら true(Ollama は常に true)
-     */
-    public boolean isAiReady() {
-        if (currentAiProvider == RecipeAIService.Provider.LLAMA_CPP) return !getLlamaCppUrl().isEmpty();
-        return !currentAiProvider.requiresApiKey() || !getCurrentApiKey().isEmpty();
-    }
-
-    /**
-     * 現在のAI設定(プロバイダー・APIキー・モデル)を反映した RecipeAIService を生成する。
-     * @return 設定済みの RecipeAIService
-     */
-    public RecipeAIService createAiService() {
-        RecipeAIService service = new RecipeAIService();
-        service.setConfig(currentAiProvider, getCurrentApiKey(), getCurrentModelName());
-        service.setLlamaCppUrl(getLlamaCppUrl());
-        return service;
-    }
+    public AiSettings getAiSettings() { return aiSettings; }
 
     /**
      * アプリのエントリーポイント。Look&Feel を適用してから JFrame を生成・表示する。

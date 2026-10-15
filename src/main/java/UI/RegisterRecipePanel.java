@@ -48,7 +48,7 @@ public class RegisterRecipePanel extends JPanel {
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.setBorder(new EmptyBorder(30, 50, 30, 50));
 
-        JButton btnAi = buildAiButton();
+        JButton btnAi = UIComponents.createAiButton("✨ AI自動提案");
         form.add(buildHeader(btnAi));
         form.add(Box.createRigidArea(new Dimension(0, 20)));
 
@@ -176,36 +176,19 @@ public class RegisterRecipePanel extends JPanel {
     }
 
     /**
-     * AI自動提案ボタンの見た目を構築する。
-     * @return スタイル適用済みの JButton
-     */
-    private JButton buildAiButton() {
-        JButton btnAi = new JButton("✨ AI自動提案");
-        btnAi.setBackground(Theme.COLOR_AI);
-        btnAi.setForeground(Color.WHITE);
-        btnAi.setOpaque(true);
-        btnAi.setBorderPainted(false);
-        btnAi.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        return btnAi;
-    }
-
-    /**
      * AI自動提案を非同期で要求し、成功時はフォームに反映する。
      * @param btnAi 押下されたAIボタン(処理中は無効化される)
      */
     private void requestAiSuggestion(JButton btnAi) {
-        if (!owner.isAiReady()) {
-            JOptionPane.showMessageDialog(this, "先に「AI設定」メニューからAPIキー(llama.cpp の場合はサーバーURL)を入力してください");
-            return;
-        }
+        if (!UIComponents.ensureAiReady(this, owner.getAiSettings())) return;
         btnAi.setText("生成中...");
         btnAi.setEnabled(false);
 
         SwingWorker<String[], Void> worker = new SwingWorker<>() {
             @Override
             protected String[] doInBackground() throws Exception {
-                return owner.createAiService().suggestRecipe(
-                        urlField.getText().trim(), owner.getIngredientMaster().getAllIngredients());
+                return owner.getAiSettings().createService().suggestRecipe(
+                        urlField.getText().trim(), owner.getIngredientMaster().getAllIngredientNames());
             }
 
             @Override

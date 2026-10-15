@@ -2,16 +2,17 @@ package main.java.AI;
 
 import main.java.Util.JsonUtil;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * Anthropic Claude API との通信を担当するクラス。
  * プロンプト側でJSON出力を強制している(API側にJSONモードはないため)。
  */
 public class ClaudeProvider extends AbstractRecipeAIProvider {
+
+    private static final String API_VERSION = "2023-06-01";
 
     @Override
     public String chat(String apiKey, String modelName, String prompt) throws Exception {
@@ -44,24 +45,8 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
      * @throws Exception 通信失敗 / HTTP非200時
      */
     private String post(String apiKey, String body) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL("https://api.anthropic.com/v1/messages").openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        conn.setRequestProperty("x-api-key", apiKey);
-        conn.setRequestProperty("anthropic-version", "2023-06-01");
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(60000);
-        conn.setDoOutput(true);
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(body.getBytes(StandardCharsets.UTF_8));
-        }
-
-        int responseCode = conn.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            String errorBody = readStream(conn.getErrorStream());
-            throw new Exception("Claude API エラー (HTTP " + responseCode + "): " + errorBody);
-        }
-        return readStream(conn.getInputStream());
+        return readOk(openJsonPost("https://api.anthropic.com/v1/messages", body, 10000, 60000,
+                "x-api-key", apiKey, "anthropic-version", API_VERSION), "Claude API エラー", "");
     }
 
     /**
@@ -73,27 +58,17 @@ public class ClaudeProvider extends AbstractRecipeAIProvider {
     @Override
     public String[] fetchAvailableModels(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
-        try {
-            HttpURLConnection conn = (HttpURLConnection) new URL("https://api.anthropic.com/v1/models").openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("x-api-key", apiKey);
-            conn.setRequestProperty("anthropic-version", "2023-06-01");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(10000);
-            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+        String body = httpGetOrNull("https://api.anthropic.com/v1/models", 5000, 10000,
+                "x-api-key", apiKey, "anthropic-version", API_VERSION);
+        if (body == null) return getAvailableModels();
 
-            String body = readStream(conn.getInputStream());
-            java.util.List<String> ids = JsonUtil.extractAllStrings(body, "id");
-            java.util.List<String> result = new java.util.ArrayList<>();
-            for (String id : ids) {
-                if (id.startsWith("claude-") && !result.contains(id)) result.add(id);
-            }
-            // 新しいモデルが上に来るよう逆順ソート
-            result.sort(java.util.Comparator.reverseOrder());
-            return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
-        } catch (Exception e) {
-            return getAvailableModels();
+        List<String> result = new ArrayList<>();
+        for (String id : JsonUtil.extractAllStrings(body, "id")) {
+            if (id.startsWith("claude-") && !result.contains(id)) result.add(id);
         }
+        // 新しいモデルが上に来るよう逆順ソート
+        result.sort(Comparator.reverseOrder());
+        return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
     }
 
     @Override

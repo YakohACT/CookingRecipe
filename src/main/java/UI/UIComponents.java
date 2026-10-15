@@ -1,5 +1,6 @@
 package main.java.UI;
 
+import main.java.AI.AiSettings;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.Recipe;
 import main.java.Recipe.RecipeCategory;
@@ -254,12 +255,47 @@ public final class UIComponents {
      * @return スタイル適用済みの JButton
      */
     public static JButton createPrimaryButton(String text) {
+        return createColoredButton(text, Theme.COLOR_PRIMARY);
+    }
+
+    /**
+     * 指定色を背景にした白文字のボタンを生成する(削除ボタンなど)。
+     * @param text       ボタンに表示するラベル
+     * @param background 背景色
+     * @return スタイル適用済みの JButton
+     */
+    public static JButton createColoredButton(String text, Color background) {
         JButton btn = new JButton(text);
-        btn.setBackground(Theme.COLOR_PRIMARY);
+        btn.setBackground(background);
         btn.setForeground(Color.WHITE);
         btn.setOpaque(true);
         btn.setBorderPainted(false);
         return btn;
+    }
+
+    /**
+     * AI機能を呼び出すボタン(紫色・ハンドカーソル)を生成する。
+     * @param text ボタンに表示するラベル
+     * @return スタイル適用済みの JButton
+     */
+    public static JButton createAiButton(String text) {
+        JButton btn = createColoredButton(text, Theme.COLOR_AI);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    /**
+     * AIを呼び出せる設定になっているかを確認し、未設定なら警告ダイアログを出す。
+     * @param parent ダイアログの親コンポーネント
+     * @param ai     AI利用設定
+     * @return 呼び出し可能なら true
+     */
+    public static boolean ensureAiReady(Component parent, AiSettings ai) {
+        if (ai.isReady()) return true;
+        JOptionPane.showMessageDialog(parent,
+                "先に「AI設定」メニューでプロバイダーとAPIキー(llama.cpp の場合はサーバーURL)を設定してください。",
+                "AI未設定", JOptionPane.WARNING_MESSAGE);
+        return false;
     }
 
     private UIComponents() {}

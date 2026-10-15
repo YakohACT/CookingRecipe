@@ -1,6 +1,7 @@
 package main.java.UI;
 
 import main.java.SwingMain;
+import main.java.AI.AiSettings;
 import main.java.AI.RecipeAIService;
 
 import javax.swing.*;
@@ -27,9 +28,10 @@ public class SettingsPanel extends JPanel {
     /**
      * AI設定パネルを構築する。プロバイダー切替で該当プロバイダーの保存済みモデル/キーを復元し、
      * モデル一覧は API から非同期で動的取得する。
-     * @param owner 共有状態(プロバイダー、モデル、APIキー等)を保持するフレーム
+     * @param owner 共有状態(AI利用設定)を保持するフレーム
      */
     public SettingsPanel(SwingMain owner) {
+        AiSettings ai = owner.getAiSettings();
         setLayout(new BorderLayout());
 
         JPanel form = new JPanel();
@@ -43,7 +45,7 @@ public class SettingsPanel extends JPanel {
 
         UIComponents.addLeftAligned(form, new JLabel("利用するAIプロバイダー:"));
         JComboBox<RecipeAIService.Provider> providerCombo = new JComboBox<>(RecipeAIService.Provider.values());
-        providerCombo.setSelectedItem(owner.getCurrentAiProvider());
+        providerCombo.setSelectedItem(ai.getProvider());
         providerCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         UIComponents.addLeftAligned(form, providerCombo);
         form.add(Box.createRigidArea(new Dimension(0, 15)));
@@ -90,7 +92,7 @@ public class SettingsPanel extends JPanel {
         urlSection.add(urlLabel);
         JTextField urlField = UIComponents.createStyledTextField();
         urlField.setAlignmentX(Component.LEFT_ALIGNMENT);
-        urlField.setText(owner.getLlamaCppUrl());
+        urlField.setText(ai.getLlamaCppUrl());
         urlSection.add(urlField);
         form.add(urlSection);
 
@@ -104,22 +106,21 @@ public class SettingsPanel extends JPanel {
                 return;
             }
             // ステップ1: 静的リストを先に出す
-            RecipeAIService service = new RecipeAIService();
-            service.setLlamaCppUrl(urlField.getText().trim());
             modelCombo.removeAllItems();
-            for (String m : service.getModelsForProvider(p)) modelCombo.addItem(m);
-            String saved = owner.getModelFor(p);
+            for (String m : RecipeAIService.defaultModels(p)) modelCombo.addItem(m);
+            String saved = ai.getModel(p);
             if (saved != null && !saved.isEmpty()) modelCombo.setSelectedItem(saved);
 
             // ステップ2: 非同期に API から取得
             String currentKey = new String(keyField.getPassword()).trim();
+            String currentUrl = urlField.getText().trim();
             refreshBtn.setEnabled(false);
             String previousLabel = refreshBtn.getText();
             refreshBtn.setText("取得中...");
             SwingWorker<String[], Void> w = new SwingWorker<>() {
                 @Override
                 protected String[] doInBackground() {
-                    return service.fetchModelsForProvider(p, currentKey);
+                    return RecipeAIService.fetchModels(p, currentKey, currentUrl);
                 }
                 @Override
                 protected void done() {
@@ -135,7 +136,7 @@ public class SettingsPanel extends JPanel {
                         if (currentSel != null && Arrays.asList(models).contains(currentSel)) {
                             modelCombo.setSelectedItem(currentSel);
                         } else {
-                            String savedModel = owner.getModelFor(p);
+                            String savedModel = ai.getModel(p);
                             if (savedModel != null && Arrays.asList(models).contains(savedModel)) {
                                 modelCombo.setSelectedItem(savedModel);
                             }
@@ -158,7 +159,7 @@ public class SettingsPanel extends JPanel {
         // プロバイダー切替時にAPIキー欄の表示/中身を更新し、モデル一覧も再取得
         providerCombo.addActionListener(e -> {
             RecipeAIService.Provider p = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-            keyField.setText(p == null ? "" : owner.getApiKeyFor(p));
+            keyField.setText(p == null ? "" : ai.getApiKey(p));
             applySectionVisibility.run();
             populateModels.run();
         });
@@ -178,7 +179,7 @@ public class SettingsPanel extends JPanel {
 
         // 初期表示
         RecipeAIService.Provider initial = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-        if (initial != null) keyField.setText(owner.getApiKeyFor(initial));
+        if (initial != null) keyField.setText(ai.getApiKey(initial));
         applySectionVisibility.run();
         populateModels.run();
 
@@ -186,14 +187,14 @@ public class SettingsPanel extends JPanel {
         JButton btnSave = UIComponents.createPrimaryButton("設定を保存");
         btnSave.addActionListener(e -> {
             RecipeAIService.Provider selected = (RecipeAIService.Provider) providerCombo.getSelectedItem();
-            owner.setCurrentAiProvider(selected);
-            owner.setModelFor(selected, (String) modelCombo.getSelectedItem());
+            ai.setProvider(selected);
+            ai.setModel(selected, (String) modelCombo.getSelectedItem());
             // ローカルLLMはキー不要なので保存スキップ
             if (selected.requiresApiKey()) {
-                owner.setApiKeyFor(selected, new String(keyField.getPassword()).trim());
+                ai.setApiKey(selected, new String(keyField.getPassword()).trim());
             }
             if (selected == RecipeAIService.Provider.LLAMA_CPP) {
-                owner.setLlamaCppUrl(urlField.getText());
+                ai.setLlamaCppUrl(urlField.getText());
             }
             JOptionPane.showMessageDialog(this, "設定を保存しました");
             owner.showWelcome();

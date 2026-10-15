@@ -1,14 +1,13 @@
 package main.java.AI;
 
-import main.java.Recipe.Ingredient;
 import main.java.Util.JsonUtil;
 
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Google Gemini との通信を担当するクラス。
@@ -17,10 +16,11 @@ import java.util.ArrayList;
  */
 public class GeminiProvider extends AbstractRecipeAIProvider {
 
+    private static final String API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+
     @Override
-    public String[] generateRecipe(String apiKey, String modelName, String url, ArrayList<Ingredient> allIngredients) throws Exception {
-        String cleanKey = apiKey.trim();
-        String prompt = buildPrompt(url, allIngredients);
+    public String[] generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
+        String prompt = buildPrompt(url, ingredientNames);
         String safePrompt = JsonUtil.escape(prompt);
 
         StringBuilder partsJson = new StringBuilder();
@@ -52,11 +52,9 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
                 + "\"temperature\":0.3"
                 + "}";
 
-        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
-                + ":generateContent?key=" + URLEncoder.encode(cleanKey, StandardCharsets.UTF_8);
         String json = "{\"contents\":[{\"parts\":[" + partsJson + "]}]," + generationConfig + "}";
 
-        String jsonRes = postWithRetry(urlStr, json);
+        String jsonRes = postWithRetry(generateContentUrl(apiKey, modelName), json);
 
         // candidates[0].content.parts[0].text からモデルが返したJSON文字列を抽出してパース
         return parseRecipeJson(extractContent(jsonRes, "text"));
@@ -64,14 +62,22 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
 
     @Override
     public String chat(String apiKey, String modelName, String prompt) throws Exception {
-        String cleanKey = apiKey.trim();
         String safePrompt = JsonUtil.escape(prompt);
         // レシピ生成と違い動画添付や固定スキーマは不要。JSON出力だけ促す
         String json = "{\"contents\":[{\"parts\":[{\"text\":\"" + safePrompt + "\"}]}],"
                 + "\"generationConfig\":{\"responseMimeType\":\"application/json\",\"temperature\":0.2}}";
-        String urlStr = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName
-                + ":generateContent?key=" + URLEncoder.encode(cleanKey, StandardCharsets.UTF_8);
-        return extractContent(postWithRetry(urlStr, json), "text");
+        return extractContent(postWithRetry(generateContentUrl(apiKey, modelName), json), "text");
+    }
+
+    /**
+     * generateContent エンドポイントのURLを組み立てる(APIキーはクエリで渡す)。
+     * @param apiKey    Gemini APIキー
+     * @param modelName モデル名
+     * @return リクエスト先URL
+     */
+    private static String generateContentUrl(String apiKey, String modelName) {
+        return API_BASE + "/" + modelName
+                + ":generateContent?key=" + URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8);
     }
 
     /**
@@ -85,27 +91,13 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
         int maxRetries = 3;
         int delayMs = 2000;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(60000);
-            conn.setDoOutput(true);
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
-            }
-
-            int responseCode = conn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                return readStream(conn.getInputStream());
-            }
-            String errorBody = readStream(conn.getErrorStream());
-            if (responseCode == 503 && attempt < maxRetries) {
+            HttpURLConnection conn = openJsonPost(urlStr, json, 10000, 60000);
+            if (conn.getResponseCode() == 503 && attempt < maxRetries) {
                 Thread.sleep(delayMs);
                 delayMs *= 2;
                 continue;
             }
-            throw new Exception("Gemini API エラー (HTTP " + responseCode + "): " + errorBody);
+            return readOk(conn, "Gemini API エラー", "");
         }
         throw new Exception("Gemini API エラー: リトライ上限に到達しました");
     }
@@ -133,28 +125,18 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     @Override
     public String[] fetchAvailableModels(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) return getAvailableModels();
-        try {
-            String url = "https://generativelanguage.googleapis.com/v1beta/models?key="
-                    + URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8);
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(10000);
-            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
+        String body = httpGetOrNull(API_BASE + "?key=" + URLEncoder.encode(apiKey.trim(), StandardCharsets.UTF_8),
+                5000, 10000);
+        if (body == null) return getAvailableModels();
 
-            String body = readStream(conn.getInputStream());
-            java.util.List<String> names = JsonUtil.extractAllStrings(body, "name");
-            java.util.List<String> result = new java.util.ArrayList<>();
-            for (String n : names) {
-                String stripped = n.startsWith("models/") ? n.substring("models/".length()) : n;
-                if (!stripped.startsWith("gemini-")) continue; // 埋め込み等を除外
-                if (!result.contains(stripped)) result.add(stripped);
-            }
-            java.util.Collections.sort(result);
-            return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
-        } catch (Exception e) {
-            return getAvailableModels();
+        List<String> result = new ArrayList<>();
+        for (String n : JsonUtil.extractAllStrings(body, "name")) {
+            String stripped = n.startsWith("models/") ? n.substring("models/".length()) : n;
+            if (!stripped.startsWith("gemini-")) continue; // 埋め込み等を除外
+            if (!result.contains(stripped)) result.add(stripped);
         }
+        Collections.sort(result);
+        return result.isEmpty() ? getAvailableModels() : result.toArray(new String[0]);
     }
 
     @Override

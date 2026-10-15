@@ -141,7 +141,7 @@ public final class BatchUrlImporter {
 
             Status finalStatus = Status.FAILED;
             try {
-                String[] result = aiService.suggestRecipe(url, master.getAllIngredients());
+                String[] result = aiService.suggestRecipe(url, master.getAllIngredientNames());
                 Recipe recipe = buildRecipe(result, url, master);
                 if (recipe != null) {
                     recipeList.addRecipe(recipe);

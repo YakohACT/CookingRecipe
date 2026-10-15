@@ -128,6 +128,14 @@ public class IngredientMaster {
     }
 
     /**
+     * 全ての食材名を登録順で返すメソッド(AIへ渡す食材リストなどに使う)
+     * @return 全食材名のリスト
+     */
+    public List<String> getAllIngredientNames() {
+        return new ArrayList<>(database.keySet());
+    }
+
+    /**
      * カンマ区切りの食材名をマスタの食材に解決するメソッド
      * 未登録の食材は OTHER カテゴリで追加し、同じ食材は1つにまとめる
      * @param commaSeparatedNames "食材1,食材2,…" 形式の文字列(AIの提案結果など)

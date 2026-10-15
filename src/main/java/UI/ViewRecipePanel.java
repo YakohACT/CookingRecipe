@@ -34,11 +34,7 @@ public class ViewRecipePanel extends JPanel {
         container.setOpaque(false);
         container.add(new JScrollPane(detail), BorderLayout.CENTER);
 
-        JButton btnDelete = new JButton("選択中のレシピを削除");
-        btnDelete.setBackground(Theme.COLOR_DELETE);
-        btnDelete.setForeground(Color.WHITE);
-        btnDelete.setOpaque(true);
-        btnDelete.setBorderPainted(false);
+        JButton btnDelete = UIComponents.createColoredButton("選択中のレシピを削除", Theme.COLOR_DELETE);
         btnDelete.setEnabled(false);
         btnDelete.addActionListener(e -> deleteSelected(source));
 

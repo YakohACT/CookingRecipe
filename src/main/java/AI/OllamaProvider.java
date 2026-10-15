@@ -2,11 +2,11 @@ package main.java.AI;
 
 import main.java.Util.JsonUtil;
 
-import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * ローカルLLM Ollama (http://localhost:11434/api/chat) との通信を担当するクラス。
@@ -33,24 +33,16 @@ public class OllamaProvider extends AbstractRecipeAIProvider {
      */
     @Override
     public String[] fetchAvailableModels(String apiKey) {
-        try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(OLLAMA_TAGS_URL).openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(2000);
-            conn.setReadTimeout(5000);
-            if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) return getAvailableModels();
-            String body = readStream(conn.getInputStream());
-            // {"models":[{"name":"llama3:8b","modified_at":"...",...}, ...]}
-            java.util.List<String> names = JsonUtil.extractAllStrings(body, "name");
-            java.util.List<String> uniq = new java.util.ArrayList<>();
-            for (String n : names) {
-                if (n != null && !n.isEmpty() && !uniq.contains(n)) uniq.add(n);
-            }
-            java.util.Collections.sort(uniq);
-            return uniq.isEmpty() ? getAvailableModels() : uniq.toArray(new String[0]);
-        } catch (Exception e) {
-            return getAvailableModels();
+        String body = httpGetOrNull(OLLAMA_TAGS_URL, 2000, 5000);
+        if (body == null) return getAvailableModels();
+
+        // {"models":[{"name":"llama3:8b","modified_at":"...",...}, ...]}
+        List<String> uniq = new ArrayList<>();
+        for (String n : JsonUtil.extractAllStrings(body, "name")) {
+            if (n != null && !n.isEmpty() && !uniq.contains(n)) uniq.add(n);
         }
+        Collections.sort(uniq);
+        return uniq.isEmpty() ? getAvailableModels() : uniq.toArray(new String[0]);
     }
 
     @Override
@@ -78,27 +70,14 @@ public class OllamaProvider extends AbstractRecipeAIProvider {
 
         HttpURLConnection conn;
         try {
-            conn = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(120000); // ローカルLLMは生成が遅いため長めに
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
-            }
+            // ローカルLLMは生成が遅いため読み取りタイムアウトは長めに
+            conn = openJsonPost(OLLAMA_URL, json, 5000, 120000);
         } catch (ConnectException e) {
             throw new Exception("Ollama に接続できません。`ollama serve` が " + OLLAMA_URL
                     + " で起動しているか確認してください。", e);
         }
-
-        int responseCode = conn.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            String errorBody = readStream(conn.getErrorStream());
-            throw new Exception("Ollama API エラー (HTTP " + responseCode + "): " + errorBody
-                    + "\n(モデル '" + modelName + "' が `ollama pull` 済みかも確認してください)");
-        }
-        return readStream(conn.getInputStream());
+        return readOk(conn, "Ollama API エラー",
+                "\n(モデル '" + modelName + "' が `ollama pull` 済みかも確認してください)");
     }
 
     /**

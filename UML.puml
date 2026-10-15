@@ -4,17 +4,17 @@ skinparam ClassAttributeIconSize 0
 '  Recipe Manager - 完全版クラス図 (private メンバーを含む全メンバー)
 '  ※ 実装(src/main/java 配下)と1:1で対応。
 '    匿名 SwingWorker / リスナー等のローカルクラスは図には含めない。
+'  依存の向き: UI(SwingMain含む) → Recipe → AI → Util の一方向。
+'    AI パッケージは文字列(URL・食材名・プロンプト)だけを扱い、Recipe には依存しない。
 
 class SwingMain extends JFrame {
     - {static} PREFS: Preferences
     - {static} PREF_THEME: String
-    - {static} PREF_LLAMA_CPP_URL: String
     - {static} FLATLAF_AVAILABLE: boolean
     - allRecipeList: AllRecipeList
     - ingredientMaster: IngredientMaster
+    - aiSettings: AiSettings
     - centerPanel: JPanel
-    - apiKeyStore: ApiKeyStore
-    - currentAiProvider: RecipeAIService.Provider
     - darkMode: boolean
     - themeButton: JButton
     + SwingMain()
@@ -28,18 +28,7 @@ class SwingMain extends JFrame {
     + showWelcome(): void
     + getAllRecipeList(): AllRecipeList
     + getIngredientMaster(): IngredientMaster
-    + getCurrentAiProvider(): RecipeAIService.Provider
-    + setCurrentAiProvider(p: Provider): void
-    + getCurrentApiKey(): String
-    + getApiKeyFor(p: Provider): String
-    + setApiKeyFor(p: Provider, plainKey: String): void
-    + getCurrentModelName(): String
-    + getModelFor(p: Provider): String
-    + setModelFor(p: Provider, model: String): void
-    + getLlamaCppUrl(): String
-    + setLlamaCppUrl(url: String): void
-    + isAiReady(): boolean
-    + createAiService(): RecipeAIService
+    + getAiSettings(): AiSettings
     + {static} main(args: String[]): void
 }
 
@@ -55,7 +44,6 @@ package "UI"{
         + RegisterRecipePanel(owner: SwingMain, editTarget: Recipe)
         - prefillFromRecipe(r: Recipe): void
         - buildHeader(btnAi: JButton): JPanel
-        - buildAiButton(): JButton
         - requestAiSuggestion(btnAi: JButton): void
         - applyAiResult(result: String[]): boolean
         - submitRecipe(): void
@@ -92,7 +80,6 @@ package "UI"{
         - moveSelected(delta: int): void
         - swapRows(a: int, b: int): void
         - refreshRowNumbers(): void
-        - buildUnifyButton(): JButton
         - detectAndUnifyVariants(): void
         - handleDetectedGroups(groups): void
         - reloadTable(): void
@@ -127,6 +114,9 @@ package "UI"{
         - {static} toHex(c: Color): String
         + {static} addLeftAligned(panel: JPanel, comp: JComponent): void
         + {static} createPrimaryButton(text: String): JButton
+        + {static} createColoredButton(text: String, background: Color): JButton
+        + {static} createAiButton(text: String): JButton
+        + {static} ensureAiReady(parent: Component, ai: AiSettings): boolean
         - UIComponents()
     }
 }
@@ -199,6 +189,7 @@ package "Recipe"{
         - locateCsv(): File
         + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
         + getAllIngredients(): ArrayList<Ingredient>
+        + getAllIngredientNames(): List<String>
         + resolveAll(commaSeparatedNames: String): ArrayList<Ingredient>
         + replaceAll(ordered: List<Ingredient>): void
         - saveCsv(): void
@@ -263,8 +254,9 @@ package "Recipe"{
 
     class IngredientNormalizer <<utility>> {
         - IngredientNormalizer()
-        + {static} buildPrompt(names: List<String>): String
-        + {static} parseGroups(json: String): List<VariantGroup>
+        + {static} detectVariants(ai: RecipeAIService, names: List<String>): List<VariantGroup>
+        - {static} buildPrompt(names: List<String>): String
+        - {static} parseGroups(json: String): List<VariantGroup>
         + {static} filterExisting(groups: List<VariantGroup>, master: IngredientMaster): List<VariantGroup>
         + {static} apply(groups: List<VariantGroup>, master: IngredientMaster, recipeList: AllRecipeList): ApplyResult
     }
@@ -272,19 +264,21 @@ package "Recipe"{
     class "IngredientNormalizer.VariantGroup" as VariantGroup {
         + {final} canonical: String
         + {final} variants: List<String>
+        + VariantGroup(canonical: String, variants: List<String>)
     }
 
     class "IngredientNormalizer.ApplyResult" as ApplyResult {
         + {final} mergedNames: int
         + {final} updatedRecipes: int
+        + ApplyResult(mergedNames: int, updatedRecipes: int)
     }
 
     note right of IngredientNormalizer
       食材名の表記ゆれをAIで統一する処理。
-      buildPrompt→(RecipeAIService.chat)→parseGroups で
-      検出し、filterExisting で実在する名前に絞り込み、
+      detectVariants で buildPrompt→RecipeAIService.chat→parseGroups
+      の順に検出し、filterExisting で実在する名前に絞り込み、
       apply でマスタとレシピを書き換える。
-      AI実装には依存せず文字列入出力のみを扱う。
+      AIとは RecipeAIService.chat の文字列入出力だけでやり取りする。
     end note
 
     IngredientNormalizer +-- VariantGroup
@@ -302,6 +296,7 @@ package "Recipe"{
         + findAll(): List<Recipe>
         + insert(recipe: Recipe): long
         + update(recipe: Recipe): void
+        - insertChildren(conn: Connection, id: long, recipe: Recipe): void
         + delete(id: long): void
     }
 
@@ -311,6 +306,7 @@ package "Recipe"{
         ~ {final} url: String
         ~ {final} ingredients: ArrayList<Ingredient>
         ~ {final} categories: EnumSet<RecipeCategory>
+        ~ RecipeBuilder(id: long, title: String, url: String)
     }
 
     RecipeRepository +-- RecipeBuilder
@@ -400,29 +396,48 @@ package "AI"{
         + decrypt(ciphertextB64: String): String
     }
 
-    class ApiKeyStore {
-        - {static} PREF_PREFIX: String = "apiKey."
-        - {final} secure: SecureKeyStore
+    'AI設定の保存層
+    class AiSettings {
+        - {static} PREF_PROVIDER: String = "aiProvider"
+        - {static} PREF_MODEL_PREFIX: String = "aiModel."
+        - {static} PREF_API_KEY_PREFIX: String = "apiKey."
+        - {static} PREF_LLAMA_CPP_URL: String = "llamaCppUrl"
         - {final} prefs: Preferences
-        + ApiKeyStore(secure: SecureKeyStore, prefs: Preferences)
-        + getKey(provider: Provider): String
-        + setKey(provider: Provider, plainKey: String): void
+        - {final} secure: SecureKeyStore
+        - provider: Provider
+        + AiSettings(prefs: Preferences)
+        + getProvider(): Provider
+        + setProvider(p: Provider): void
+        + getApiKey(p: Provider): String
+        + setApiKey(p: Provider, plainKey: String): void
+        + getModel(p: Provider): String
+        + setModel(p: Provider, model: String): void
+        + getLlamaCppUrl(): String
+        + setLlamaCppUrl(url: String): void
+        + isReady(): boolean
+        + createService(): RecipeAIService
     }
+
+    note right of AiSettings
+      プロバイダー・APIキー(暗号化)・モデル・llama.cpp URL を
+      Java Preferences に保存/復元する。
+      設定済みの RecipeAIService を createService で生成する。
+    end note
 
     'AI制御層
     class RecipeAIService {
-        - selectedProvider: Provider
-        - apiKey: String
-        - modelName: String
-        - llamaCppUrl: String
-        + setConfig(provider: Provider, apiKey: String, modelName: String): void
-        + setLlamaCppUrl(url: String): void
-        + suggestRecipe(url: String, allIngredients: ArrayList<Ingredient>): String[]
-        + detectIngredientVariants(names: List<String>): List<VariantGroup>
-        + getModelsForProvider(provider: Provider): String[]
-        + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
+        - {final} provider: Provider
+        - {final} apiKey: String
+        - {final} modelName: String
+        - {final} llamaCppUrl: String
+        + RecipeAIService(provider: Provider, apiKey: String, modelName: String, llamaCppUrl: String)
+        + {static} isConfigured(provider: Provider, apiKey: String, llamaCppUrl: String): boolean
+        + suggestRecipe(url: String, ingredientNames: List<String>): String[]
+        + chat(prompt: String): String
+        + {static} defaultModels(provider: Provider): String[]
+        + {static} fetchModels(provider: Provider, apiKey: String, llamaCppUrl: String): String[]
         - ensureConfigured(): void
-        - createProvider(provider: Provider): AbstractRecipeAIProvider
+        - {static} createProvider(provider: Provider, llamaCppUrl: String): AbstractRecipeAIProvider
     }
 
     enum "RecipeAIService.Provider" as Provider {
@@ -438,12 +453,15 @@ package "AI"{
     abstract class AbstractRecipeAIProvider {
         + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
         + {abstract} getAvailableModels(): String[]
-        + generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
+        + generateRecipe(apiKey: String, modelName: String, url: String, ingredientNames: List<String>): String[]
         + fetchAvailableModels(apiKey: String): String[]
-        # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
+        # buildPrompt(url: String, ingredientNames: List<String>): String
         # parseRecipeJson(text: String): String[]
         - stripBrackets(s: String): String
         # {static} readStream(stream: InputStream): String
+        # {static} openJsonPost(url: String, body: String, connectMs: int, readMs: int, headerPairs: String...): HttpURLConnection
+        # {static} readOk(conn: HttpURLConnection, errorLabel: String, hint: String): String
+        # {static} httpGetOrNull(url: String, connectMs: int, readMs: int, headerPairs: String...): String
         # extractContent(jsonRes: String, contentKey: String): String
     }
 
@@ -453,7 +471,8 @@ package "AI"{
       generateRecipe は chat にレシピ用プロンプトを送り
       parseRecipeJson で解析する共通実装。
       動画を添付する Gemini のみオーバーライドする。
-      各具象は post/buildBody でHTTPを共通化。
+      HTTP送受信は openJsonPost / readOk / httpGetOrNull を
+      各具象が共通で使う。
     end note
 
     class OpenAIProvider {
@@ -466,8 +485,10 @@ package "AI"{
     }
 
     class GeminiProvider {
+        - {static} API_BASE: String
         + generateRecipe(...): String[]
         + chat(apiKey, modelName, prompt): String
+        - {static} generateContentUrl(apiKey: String, modelName: String): String
         - postWithRetry(urlStr: String, json: String): String
         ~ {static} canonicalYoutubeUrl(url: String): String
         + fetchAvailableModels(apiKey: String): String[]
@@ -475,6 +496,7 @@ package "AI"{
     }
 
     class ClaudeProvider {
+        - {static} API_VERSION: String = "2023-06-01"
         + chat(apiKey, modelName, prompt): String
         - {static} buildBody(modelName: String, prompt: String): String
         - post(apiKey: String, body: String): String
@@ -524,7 +546,7 @@ package "AI"{
 ' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
-SwingMain ..> RecipeAIService : createAiService で生成
+SwingMain --> AiSettings : holds
 SwingMain o--> RegisterRecipePanel    : creates >
 SwingMain o--> ViewRecipePanel        : creates >
 SwingMain o--> SettingsPanel          : creates >
@@ -535,8 +557,9 @@ IngredientMasterPanel ..> IngredientMaster : edits & persists
 DataIOPanel ..> SwingMain
 DataIOPanel ..> RecipeIO : uses
 DataIOPanel ..> BatchUrlImporter : URL一括取込
-DataIOPanel ..> RecipeAIService  : 一括取込時に呼び出し
+DataIOPanel ..> AiSettings  : 一括取込時に createService
 DataIOPanel ..> UIComponents
+IngredientMasterPanel ..> UIComponents
 BatchUrlImporter ..> RecipeAIService
 BatchUrlImporter ..> IngredientMaster
 BatchUrlImporter ..> AllRecipeList
@@ -547,8 +570,10 @@ RegisterRecipePanel ..> SwingMain
 ViewRecipePanel     ..> SwingMain
 SettingsPanel       ..> SwingMain
 
-RegisterRecipePanel ..> RecipeAIService : uses
-SettingsPanel       ..> RecipeAIService : uses
+RegisterRecipePanel ..> AiSettings : createService で AI 呼び出し
+SettingsPanel       ..> AiSettings : 設定の読み書き
+SettingsPanel       ..> RecipeAIService : モデル一覧の取得
+UIComponents        ..> AiSettings : ensureAiReady
 
 RegisterRecipePanel ..> UIComponents
 ViewRecipePanel     ..> UIComponents
@@ -577,15 +602,14 @@ RecipeRepository  ..> IngredientMaster : looks up
 RecipeRepository  ..> Recipe           : <<persists to SQLite>>
 RecipeRepository  ..> RecipeCategory   : stores enum name
 
-' --- 暗号化キーストア層 ---
-SwingMain        --> ApiKeyStore     : holds
-ApiKeyStore      --> SecureKeyStore  : delegates encryption
-SettingsPanel    ..> ApiKeyStore     : per-provider get/set
+' --- AI設定・暗号化キーストア層 ---
+AiSettings       --> SecureKeyStore  : APIキーを暗号化
+AiSettings       ..> RecipeAIService : createService で生成
 
 ' --- 表記ゆれ統一 ---
-RecipeAIService       ..> IngredientNormalizer : buildPrompt / parseGroups
-IngredientMasterPanel ..> RecipeAIService      : 表記ゆれ検出
-IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
+IngredientNormalizer  ..> RecipeAIService      : chat で表記ゆれ検出
+IngredientMasterPanel ..> AiSettings           : createService
+IngredientMasterPanel ..> IngredientNormalizer : 検出と統一の適用
 
 ' --- AI層 ---
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
@@ -593,7 +617,6 @@ RecipeAIService     +-- Provider
 AbstractRecipeAIProvider ..> WebPageFetcher : fetches non-YouTube URL
 AbstractRecipeAIProvider ..> YoutubeMetadataFetcher : fetches YouTube title+transcript
 YoutubeMetadataFetcher   ..> WhisperTranscriber : fallback when no captions
-AbstractRecipeAIProvider ..> Ingredient
 GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
 GeminiProvider      ..> YoutubeMetadataFetcher : 動画IDの抽出
 

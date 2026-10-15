@@ -58,7 +58,7 @@ public class IngredientMasterPanel extends JPanel {
         UIComponents.addLeftAligned(header, hint);
 
         // 右上: 表記ゆれをAIで統一するボタン
-        JButton btnUnify = buildUnifyButton();
+        JButton btnUnify = UIComponents.createAiButton("✨ 表記ゆれをAIで統一");
         btnUnify.addActionListener(e -> detectAndUnifyVariants());
         JPanel northEast = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         northEast.setOpaque(false);
@@ -187,20 +187,6 @@ public class IngredientMasterPanel extends JPanel {
     }
 
     /**
-     * 「表記ゆれをAIで統一」ボタンの見た目を構築する(AI機能であることを示す紫色)。
-     * @return スタイル適用済みの JButton
-     */
-    private JButton buildUnifyButton() {
-        JButton btn = new JButton("✨ 表記ゆれをAIで統一");
-        btn.setBackground(Theme.COLOR_AI);
-        btn.setForeground(Color.WHITE);
-        btn.setOpaque(true);
-        btn.setBorderPainted(false);
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-
-    /**
      * AIに食材名の表記ゆれを検出させ、確認のうえマスタとレシピへ統一を適用する。
      * AIの呼び出しはモーダル進捗ダイアログ付きでバックグラウンド実行する。
      */
@@ -208,15 +194,9 @@ public class IngredientMasterPanel extends JPanel {
         if (table.isEditing()) table.getCellEditor().stopCellEditing();
 
         // ローカルLLM(Ollama / llama.cpp)以外は APIキー必須
-        if (!owner.isAiReady()) {
-            JOptionPane.showMessageDialog(this,
-                    "先に「AI設定」メニューでプロバイダーとAPIキー(llama.cpp の場合はサーバーURL)を設定してください。",
-                    "AI未設定", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        if (!UIComponents.ensureAiReady(this, owner.getAiSettings())) return;
 
-        List<String> names = new ArrayList<>();
-        for (Ingredient ing : owner.getIngredientMaster().getAllIngredients()) names.add(ing.getName());
+        List<String> names = owner.getIngredientMaster().getAllIngredientNames();
         if (names.size() < 2) {
             JOptionPane.showMessageDialog(this,
                     "食材が2件未満のため、表記ゆれ検出をスキップしました。",
@@ -244,7 +224,7 @@ public class IngredientMasterPanel extends JPanel {
         SwingWorker<List<IngredientNormalizer.VariantGroup>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<IngredientNormalizer.VariantGroup> doInBackground() throws Exception {
-                return owner.createAiService().detectIngredientVariants(names);
+                return IngredientNormalizer.detectVariants(owner.getAiSettings().createService(), names);
             }
 
             @Override

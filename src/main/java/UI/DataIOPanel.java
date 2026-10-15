@@ -153,12 +153,7 @@ public class DataIOPanel extends JPanel {
      */
     private void doBatchUrlImport(SwingMain owner) {
         // 1. AI 設定チェック (ローカルLLM以外は APIキー必須)
-        if (!owner.isAiReady()) {
-            JOptionPane.showMessageDialog(this,
-                    "先に「AI設定」メニューでプロバイダーとAPIキー(llama.cpp の場合はサーバーURL)を設定してください。",
-                    "AI未設定", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        if (!UIComponents.ensureAiReady(this, owner.getAiSettings())) return;
 
         // 2. ファイル選択
         JFileChooser chooser = new JFileChooser();
@@ -236,7 +231,7 @@ public class DataIOPanel extends JPanel {
             @Override
             protected BatchUrlImporter.Result doInBackground() {
                 return BatchUrlImporter.importAll(urls,
-                        owner.createAiService(),
+                        owner.getAiSettings().createService(),
                         owner.getIngredientMaster(),
                         owner.getAllRecipeList(),
                         this::publish,
