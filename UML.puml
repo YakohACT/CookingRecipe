@@ -1,12 +1,6 @@
 @startuml
 skinparam ClassAttributeIconSize 0
 
-'  Recipe Manager - 完全版クラス図 (private メンバーを含む全メンバー)
-'  ※ 実装(src/main/java 配下)と1:1で対応。
-'    匿名 SwingWorker / リスナー等のローカルクラスは図には含めない。
-'  依存の向き: UI(SwingMain含む) → Recipe → AI → Util の一方向。
-'    AI パッケージは文字列(URL・食材名・プロンプト)だけを扱い、Recipe には依存しない。
-
 class SwingMain extends JFrame {
     - {static} PREFS: Preferences
     - {static} PREF_THEME: String
@@ -273,14 +267,6 @@ package "Recipe"{
         + ApplyResult(mergedNames: int, updatedRecipes: int)
     }
 
-    note right of IngredientNormalizer
-      食材名の表記ゆれをAIで統一する処理。
-      detectVariants で buildPrompt→RecipeAIService.chat→parseGroups
-      の順に検出し、filterExisting で実在する名前に絞り込み、
-      apply でマスタとレシピを書き換える。
-      AIとは RecipeAIService.chat の文字列入出力だけでやり取りする。
-    end note
-
     IngredientNormalizer +-- VariantGroup
     IngredientNormalizer +-- ApplyResult
     IngredientNormalizer ..> IngredientMaster : replaceAll で集約
@@ -326,11 +312,7 @@ package "Util"{
         - {static} findValueStart(json: String, key: String, from: int): int
         - {static} skipWhitespace(s: String, pos: int): int
     }
-note right of JsonUtil
-  外部ライブラリを使わない簡易JSON処理。
-  AIレスポンス解析・レシピJSON入出力・
-  表記ゆれ結果の解析はすべてここを経由する。
-end note
+
 }
 package "AI"{
     class WebPageFetcher <<utility>> {
@@ -380,7 +362,6 @@ package "AI"{
         - {static} deleteRecursively(root: Path): void
     }
 
-    ' 暗号化層
     class SecureKeyStore {
         - {static} ALGO: String = "AES/GCM/NoPadding"
         - {static} GCM_TAG_BITS: int = 128
@@ -396,7 +377,6 @@ package "AI"{
         + decrypt(ciphertextB64: String): String
     }
 
-    'AI設定の保存層
     class AiSettings {
         - {static} PREF_PROVIDER: String = "aiProvider"
         - {static} PREF_MODEL_PREFIX: String = "aiModel."
@@ -418,13 +398,6 @@ package "AI"{
         + createService(): RecipeAIService
     }
 
-    note right of AiSettings
-      プロバイダー・APIキー(暗号化)・モデル・llama.cpp URL を
-      Java Preferences に保存/復元する。
-      設定済みの RecipeAIService を createService で生成する。
-    end note
-
-    'AI制御層
     class RecipeAIService {
         - {final} provider: Provider
         - {final} apiKey: String
@@ -464,16 +437,6 @@ package "AI"{
         # {static} httpGetOrNull(url: String, connectMs: int, readMs: int, headerPairs: String...): String
         # extractContent(jsonRes: String, contentKey: String): String
     }
-
-    note right of AbstractRecipeAIProvider
-      chat は任意プロンプト→モデル本文(JSON)を返す
-      汎用呼び出しで、各具象が実装する。
-      generateRecipe は chat にレシピ用プロンプトを送り
-      parseRecipeJson で解析する共通実装。
-      動画を添付する Gemini のみオーバーライドする。
-      HTTP送受信は openJsonPost / readOk / httpGetOrNull を
-      各具象が共通で使う。
-    end note
 
     class OpenAIProvider {
         + chat(apiKey, modelName, prompt): String
@@ -523,27 +486,8 @@ package "AI"{
         - post(body: String): String
         + getAvailableModels(): String[]
     }
-
-    note right of LlamaCppProvider
-      llama-server の OpenAI互換API(/v1/chat/completions)に接続。
-      URLはAI設定で入力(初回は空欄=未設定。ポートは版により 9931 / 8080)。
-      model は /v1/models から選択(ルーターモードでは必須)。
-      enable_thinking=false で推論モデルの思考を止める。
-    end note
-
-    note right of OllamaProvider
-      モデルファミリ(Llama/Gemma/Mistral/Phi/Qwen等)で
-      APIの違いは無いため1クラスで全モデルを扱う。
-      getAvailableModels は Ollama 未起動時の
-      フォールバック(動作確認済みモデル一覧)。
-    end note
 }
 
-' ===== 関係線 =====
-' 他パッケージのクラスを参照する関係線は、すべてのパッケージ宣言の後(ここ)に書く。
-' package { } の中で未宣言のクラス名を参照すると、そのパッケージ内に同名の空クラスが別途作られてしまう。
-
-' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
 SwingMain --> AiSettings : holds
@@ -589,29 +533,24 @@ SettingsPanel       ..> Theme
 RegisterRecipePanel ..> RecipeCategory : multi-select
 ViewRecipePanel     ..> RecipeCategory : filter
 
-' --- ドメイン層 ---
 AllRecipeList "1" *-- "many" Recipe
 Recipe "many" o-- "many" Ingredient
 Recipe "many" -- "many" RecipeCategory
 Ingredient "many" -- "1" IngredientCategory
 IngredientMaster "1" *-- "many" Ingredient
 
-' --- 永続化層 ---
 AllRecipeList     --> RecipeRepository : uses
 RecipeRepository  ..> IngredientMaster : looks up
 RecipeRepository  ..> Recipe           : <<persists to SQLite>>
 RecipeRepository  ..> RecipeCategory   : stores enum name
 
-' --- AI設定・暗号化キーストア層 ---
 AiSettings       --> SecureKeyStore  : APIキーを暗号化
 AiSettings       ..> RecipeAIService : createService で生成
 
-' --- 表記ゆれ統一 ---
 IngredientNormalizer  ..> RecipeAIService      : chat で表記ゆれ検出
 IngredientMasterPanel ..> AiSettings           : createService
 IngredientMasterPanel ..> IngredientNormalizer : 検出と統一の適用
 
-' --- AI層 ---
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
 RecipeAIService     +-- Provider
 AbstractRecipeAIProvider ..> WebPageFetcher : fetches non-YouTube URL
@@ -620,13 +559,11 @@ YoutubeMetadataFetcher   ..> WhisperTranscriber : fallback when no captions
 GeminiProvider      ..> "YouTube file_data" : attaches when youtube URL
 GeminiProvider      ..> YoutubeMetadataFetcher : 動画IDの抽出
 
-' --- JSON処理 ---
 AbstractRecipeAIProvider ..> JsonUtil
 YoutubeMetadataFetcher   ..> JsonUtil
 RecipeIO                 ..> JsonUtil
 IngredientNormalizer     ..> JsonUtil
 
-' --- 継承 ---
 AbstractRecipeAIProvider <|-- OpenAIProvider
 AbstractRecipeAIProvider <|-- GeminiProvider
 AbstractRecipeAIProvider <|-- ClaudeProvider
