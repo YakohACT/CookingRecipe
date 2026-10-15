@@ -5,7 +5,6 @@ skinparam ClassAttributeIconSize 0
 '  ※ 実装(src/main/java 配下)と1:1で対応。
 '    匿名 SwingWorker / リスナー等のローカルクラスは図には含めない。
 
-' main.java.UI 層
 class SwingMain extends JFrame {
     - {static} PREFS: Preferences
     - {static} PREF_THEME: String
@@ -44,478 +43,480 @@ class SwingMain extends JFrame {
     + {static} main(args: String[]): void
 }
 
-class RegisterRecipePanel extends JPanel {
-    - owner: SwingMain
-    - editTarget: Recipe
-    - titleField: JTextField
-    - urlField: JTextField
-    - categoryList: JList<RecipeCategory>
-    - selectedListModel: DefaultListModel<Ingredient>
-    + RegisterRecipePanel(owner: SwingMain)
-    + RegisterRecipePanel(owner: SwingMain, editTarget: Recipe)
-    - prefillFromRecipe(r: Recipe): void
-    - buildHeader(btnAi: JButton): JPanel
-    - buildAiButton(): JButton
-    - requestAiSuggestion(btnAi: JButton): void
-    - applyAiResult(result: String[]): boolean
-    - submitRecipe(): void
+package "UI"{
+    class RegisterRecipePanel extends JPanel {
+        - owner: SwingMain
+        - editTarget: Recipe
+        - titleField: JTextField
+        - urlField: JTextField
+        - categoryList: JList<RecipeCategory>
+        - selectedListModel: DefaultListModel<Ingredient>
+        + RegisterRecipePanel(owner: SwingMain)
+        + RegisterRecipePanel(owner: SwingMain, editTarget: Recipe)
+        - prefillFromRecipe(r: Recipe): void
+        - buildHeader(btnAi: JButton): JPanel
+        - buildAiButton(): JButton
+        - requestAiSuggestion(btnAi: JButton): void
+        - applyAiResult(result: String[]): boolean
+        - submitRecipe(): void
+    }
+
+    class ViewRecipePanel extends JPanel {
+        - owner: SwingMain
+        - recipeModels: List<DefaultListModel<Recipe>>
+        + ViewRecipePanel(owner: SwingMain)
+        - detailWithActionButtons(detail: JEditorPane, source: JList<Recipe>): JPanel
+        - deleteSelected(source: JList<Recipe>): void
+        - buildTitleTab(): JPanel
+        - buildIngredientTab(): JPanel
+        - buildCategoryTab(): JPanel
+    }
+
+    class DataIOPanel extends JPanel {
+        + DataIOPanel(owner: SwingMain)
+        - wrapText(text: String): JComponent
+        - doExport(owner: SwingMain): void
+        - doBatchUrlImport(owner: SwingMain): void
+        - runBatchImport(owner: SwingMain, urls: List<String>): void
+        - doImport(owner: SwingMain): void
+    }
+
+    class IngredientMasterPanel extends JPanel {
+        - {static} COL_NO: int = 0
+        - {static} COL_CAT: int = 1
+        - {static} COL_NAME: int = 2
+        - owner: SwingMain
+        - model: DefaultTableModel
+        - table: JTable
+        + IngredientMasterPanel(owner: SwingMain)
+        - moveSelected(delta: int): void
+        - swapRows(a: int, b: int): void
+        - refreshRowNumbers(): void
+        - buildUnifyButton(): JButton
+        - detectAndUnifyVariants(): void
+        - handleDetectedGroups(groups): void
+        - reloadTable(): void
+        - save(): void
+    }
+
+    class SettingsPanel extends JPanel {
+        + SettingsPanel(owner: SwingMain)
+    }
+
+    class Theme <<utility>> {
+        + {static} COLOR_PRIMARY: Color
+        + {static} COLOR_SIDE: Color
+        + {static} COLOR_TEXT_LIGHT: Color
+        + {static} COLOR_DELETE: Color
+        + {static} COLOR_AI: Color
+        + {static} FONT_MAIN: Font
+        + {static} FONT_TITLE: Font
+        - Theme()
+    }
+
+    class UIComponents <<utility>> {
+        + {static} createStyledTextField(): JTextField
+        + {static} attachContextMenu(comp: JTextComponent): void
+        + {static} createStyledRecipeList(model: DefaultListModel<Recipe>): JList<Recipe>
+        + {static} createDetailArea(): JEditorPane
+        + {static} updateDetailArea(area: JEditorPane, recipe: Recipe): void
+        - {static} escapeHtml(s: String): String
+        - {static} escapeAttr(s: String): String
+        - {static} toHex(c: Color): String
+        + {static} addLeftAligned(panel: JPanel, comp: JComponent): void
+        + {static} createPrimaryButton(text: String): JButton
+        - UIComponents()
+    }
 }
 
-class ViewRecipePanel extends JPanel {
-    - owner: SwingMain
-    - recipeModels: List<DefaultListModel<Recipe>>
-    + ViewRecipePanel(owner: SwingMain)
-    - detailWithActionButtons(detail: JEditorPane, source: JList<Recipe>): JPanel
-    - deleteSelected(source: JList<Recipe>): void
-    - buildTitleTab(): JPanel
-    - buildIngredientTab(): JPanel
-    - buildCategoryTab(): JPanel
+package "Recipe"{
+    enum IngredientCategory {
+        VEGETABLE
+        MEAT
+        SEAFOOD
+        CARBOHYDRATE
+        FRUIT
+        MILK
+        PICKLES
+        SEASONING
+        OTHER
+    }
+
+    enum RecipeCategory {
+        RICE
+        MEAT
+        VEGETABLE
+        EGG
+        NOODLE
+        SOUP
+        BREAD
+        SEAFOOD
+        HOTPOT
+        FRIED
+        WASHOKU
+        YOSHOKU
+        CHUKA
+        SWEETS
+        OTHER
+        --
+        - displayName: String
+        + getDisplayName(): String
+        + toString(): String
+    }
+
+    class Ingredient {
+        - name: String
+        - category: IngredientCategory
+        + Ingredient(name: String, category: IngredientCategory)
+        + getName(): String
+        + getCategory(): IngredientCategory
+        + toString(): String
+        + equals(o: Object): boolean
+        + hashCode(): int
+    }
+
+    class Recipe {
+        - id: long
+        - title: String
+        - url: String
+        - ingredients: ArrayList<Ingredient>
+        - categories: EnumSet<RecipeCategory>
+        + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>, categories: EnumSet<RecipeCategory>)
+        + getId(): long
+        + setId(id: long): void
+        + getTitle(): String
+        + getUrl(): String
+        + getIngredients(): ArrayList<Ingredient>
+        + getCategories(): EnumSet<RecipeCategory>
+    }
+
+    class IngredientMaster {
+        - {final} database: LinkedHashMap<String, Ingredient>
+        + IngredientMaster()
+        - loadCsv(): void
+        - locateCsv(): File
+        + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
+        + getAllIngredients(): ArrayList<Ingredient>
+        + resolveAll(commaSeparatedNames: String): ArrayList<Ingredient>
+        + replaceAll(ordered: List<Ingredient>): void
+        - saveCsv(): void
+        + addIngredient(name: String): Ingredient
+        + addIngredient(name: String, category: IngredientCategory): Ingredient
+        - appendToCsv(category: IngredientCategory, name: String): void
+    }
+
+    class AllRecipeList {
+        - repository: RecipeRepository
+        - recipeList: ArrayList<Recipe>
+        + AllRecipeList(ingredientMaster: IngredientMaster)
+        + getRecipeList(): ArrayList<Recipe>
+        + addRecipe(recipe: Recipe): void
+        + deleteRecipe(recipe: Recipe): void
+        + updateRecipe(recipe: Recipe): void
+    }
+
+    class RecipeIO <<utility>> {
+        + {static} FORMAT_VERSION: int = 1
+        - RecipeIO()
+        + {static} exportToJson(recipes: List<Recipe>): String
+        - {static} serializeRecipe(r: Recipe, indent: String): String
+        + {static} parseFromJson(json: String, ingredientMaster: IngredientMaster): List<Recipe>
+        - {static} parseRecipe(obj: String, im: IngredientMaster): Recipe
+    }
+
+    class BatchUrlImporter <<utility>> {
+        - BatchUrlImporter()
+        + {static} readUrls(file: Path): List<String>
+        + {static} importAll(urls: List<String>, aiService: RecipeAIService, master: IngredientMaster, recipeList: AllRecipeList, onProgress: Consumer<Progress>, cancelCheck: BooleanSupplier): Result
+        - {static} buildRecipe(result: String[], url: String, master: IngredientMaster): Recipe
+    }
+
+    enum "BatchUrlImporter.Status" as BatchStatus {
+        PROCESSING
+        SUCCEEDED
+        FAILED
+        SKIPPED_DUPLICATE
+    }
+
+    class "BatchUrlImporter.Result" as BatchResult {
+        + {final} succeeded: int
+        + {final} failed: int
+        + {final} skipped: int
+        + {final} total: int
+        + Result(succeeded: int, failed: int, skipped: int, total: int)
+    }
+
+    class "BatchUrlImporter.Progress" as BatchProgress {
+        + {final} index: int
+        + {final} total: int
+        + {final} url: String
+        + {final} status: Status
+        + Progress(index: int, total: int, url: String, status: Status)
+    }
+
+    BatchUrlImporter +-- BatchStatus
+    BatchUrlImporter +-- BatchResult
+    BatchUrlImporter +-- BatchProgress
+    BatchProgress --> BatchStatus
+
+    class IngredientNormalizer <<utility>> {
+        - IngredientNormalizer()
+        + {static} buildPrompt(names: List<String>): String
+        + {static} parseGroups(json: String): List<VariantGroup>
+        + {static} filterExisting(groups: List<VariantGroup>, master: IngredientMaster): List<VariantGroup>
+        + {static} apply(groups: List<VariantGroup>, master: IngredientMaster, recipeList: AllRecipeList): ApplyResult
+    }
+
+    class "IngredientNormalizer.VariantGroup" as VariantGroup {
+        + {final} canonical: String
+        + {final} variants: List<String>
+    }
+
+    class "IngredientNormalizer.ApplyResult" as ApplyResult {
+        + {final} mergedNames: int
+        + {final} updatedRecipes: int
+    }
+
+    note right of IngredientNormalizer
+      食材名の表記ゆれをAIで統一する処理。
+      buildPrompt→(RecipeAIService.chat)→parseGroups で
+      検出し、filterExisting で実在する名前に絞り込み、
+      apply でマスタとレシピを書き換える。
+      AI実装には依存せず文字列入出力のみを扱う。
+    end note
+
+    IngredientNormalizer +-- VariantGroup
+    IngredientNormalizer +-- ApplyResult
+    IngredientNormalizer ..> IngredientMaster : replaceAll で集約
+    IngredientNormalizer ..> AllRecipeList : updateRecipe で置換
+    RecipeAIService ..> IngredientNormalizer : buildPrompt / parseGroups
+    IngredientMasterPanel ..> RecipeAIService : 表記ゆれ検出
+    IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
+
+    class RecipeRepository {
+        - {final} dbPath: String
+        - {final} ingredientMaster: IngredientMaster
+        + RecipeRepository(dbPath: String, ingredientMaster: IngredientMaster)
+        + {static} resolveDbPath(): String
+        - connect(): Connection
+        - ensureSchema(): void
+        + findAll(): List<Recipe>
+        + insert(recipe: Recipe): long
+        + update(recipe: Recipe): void
+        + delete(id: long): void
+    }
+
+    class "RecipeRepository.RecipeBuilder" as RecipeBuilder {
+        ~ {final} id: long
+        ~ {final} title: String
+        ~ {final} url: String
+        ~ {final} ingredients: ArrayList<Ingredient>
+        ~ {final} categories: EnumSet<RecipeCategory>
+    }
+
+    RecipeRepository +-- RecipeBuilder
 }
 
-class DataIOPanel extends JPanel {
-    + DataIOPanel(owner: SwingMain)
-    - wrapText(text: String): JComponent
-    - doExport(owner: SwingMain): void
-    - doBatchUrlImport(owner: SwingMain): void
-    - runBatchImport(owner: SwingMain, urls: List<String>): void
-    - doImport(owner: SwingMain): void
-}
-
-class IngredientMasterPanel extends JPanel {
-    - {static} COL_NO: int = 0
-    - {static} COL_CAT: int = 1
-    - {static} COL_NAME: int = 2
-    - owner: SwingMain
-    - model: DefaultTableModel
-    - table: JTable
-    + IngredientMasterPanel(owner: SwingMain)
-    - moveSelected(delta: int): void
-    - swapRows(a: int, b: int): void
-    - refreshRowNumbers(): void
-    - buildUnifyButton(): JButton
-    - detectAndUnifyVariants(): void
-    - handleDetectedGroups(groups): void
-    - reloadTable(): void
-    - save(): void
-}
-
-class SettingsPanel extends JPanel {
-    + SettingsPanel(owner: SwingMain)
-}
-
-class Theme <<utility>> {
-    + {static} COLOR_PRIMARY: Color
-    + {static} COLOR_SIDE: Color
-    + {static} COLOR_TEXT_LIGHT: Color
-    + {static} COLOR_DELETE: Color
-    + {static} COLOR_AI: Color
-    + {static} FONT_MAIN: Font
-    + {static} FONT_TITLE: Font
-    - Theme()
-}
-
-class UIComponents <<utility>> {
-    + {static} createStyledTextField(): JTextField
-    + {static} attachContextMenu(comp: JTextComponent): void
-    + {static} createStyledRecipeList(model: DefaultListModel<Recipe>): JList<Recipe>
-    + {static} createDetailArea(): JEditorPane
-    + {static} updateDetailArea(area: JEditorPane, recipe: Recipe): void
-    - {static} escapeHtml(s: String): String
-    - {static} escapeAttr(s: String): String
-    - {static} toHex(c: Color): String
-    + {static} addLeftAligned(panel: JPanel, comp: JComponent): void
-    + {static} createPrimaryButton(text: String): JButton
-    - UIComponents()
-}
-
-' ===== ドメイン層 =====
-enum IngredientCategory {
-    VEGETABLE
-    MEAT
-    SEAFOOD
-    CARBOHYDRATE
-    FRUIT
-    MILK
-    PICKLES
-    SEASONING
-    OTHER
-}
-
-enum RecipeCategory {
-    RICE
-    MEAT
-    VEGETABLE
-    EGG
-    NOODLE
-    SOUP
-    BREAD
-    SEAFOOD
-    HOTPOT
-    FRIED
-    WASHOKU
-    YOSHOKU
-    CHUKA
-    SWEETS
-    OTHER
-    --
-    - displayName: String
-    + getDisplayName(): String
-    + toString(): String
-}
-
-class Ingredient {
-    - name: String
-    - category: IngredientCategory
-    + Ingredient(name: String, category: IngredientCategory)
-    + getName(): String
-    + getCategory(): IngredientCategory
-    + toString(): String
-    + equals(o: Object): boolean
-    + hashCode(): int
-}
-
-class Recipe {
-    - id: long
-    - title: String
-    - url: String
-    - ingredients: ArrayList<Ingredient>
-    - categories: EnumSet<RecipeCategory>
-    + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>, categories: EnumSet<RecipeCategory>)
-    + getId(): long
-    + setId(id: long): void
-    + getTitle(): String
-    + getUrl(): String
-    + getIngredients(): ArrayList<Ingredient>
-    + getCategories(): EnumSet<RecipeCategory>
-}
-
-class IngredientMaster {
-    - {final} database: LinkedHashMap<String, Ingredient>
-    + IngredientMaster()
-    - loadCsv(): void
-    - locateCsv(): File
-    + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
-    + getAllIngredients(): ArrayList<Ingredient>
-    + resolveAll(commaSeparatedNames: String): ArrayList<Ingredient>
-    + replaceAll(ordered: List<Ingredient>): void
-    - saveCsv(): void
-    + addIngredient(name: String): Ingredient
-    + addIngredient(name: String, category: IngredientCategory): Ingredient
-    - appendToCsv(category: IngredientCategory, name: String): void
-}
-
-class AllRecipeList {
-    - repository: RecipeRepository
-    - recipeList: ArrayList<Recipe>
-    + AllRecipeList(ingredientMaster: IngredientMaster)
-    + getRecipeList(): ArrayList<Recipe>
-    + addRecipe(recipe: Recipe): void
-    + deleteRecipe(recipe: Recipe): void
-    + updateRecipe(recipe: Recipe): void
-}
-
-class RecipeIO <<utility>> {
-    + {static} FORMAT_VERSION: int = 1
-    - RecipeIO()
-    + {static} exportToJson(recipes: List<Recipe>): String
-    - {static} serializeRecipe(r: Recipe, indent: String): String
-    + {static} parseFromJson(json: String, ingredientMaster: IngredientMaster): List<Recipe>
-    - {static} parseRecipe(obj: String, im: IngredientMaster): Recipe
-}
-
-class BatchUrlImporter <<utility>> {
-    - BatchUrlImporter()
-    + {static} readUrls(file: Path): List<String>
-    + {static} importAll(urls: List<String>, aiService: RecipeAIService, master: IngredientMaster, recipeList: AllRecipeList, onProgress: Consumer<Progress>, cancelCheck: BooleanSupplier): Result
-    - {static} buildRecipe(result: String[], url: String, master: IngredientMaster): Recipe
-}
-
-enum "BatchUrlImporter.Status" as BatchStatus {
-    PROCESSING
-    SUCCEEDED
-    FAILED
-    SKIPPED_DUPLICATE
-}
-
-class "BatchUrlImporter.Result" as BatchResult {
-    + {final} succeeded: int
-    + {final} failed: int
-    + {final} skipped: int
-    + {final} total: int
-    + Result(succeeded: int, failed: int, skipped: int, total: int)
-}
-
-class "BatchUrlImporter.Progress" as BatchProgress {
-    + {final} index: int
-    + {final} total: int
-    + {final} url: String
-    + {final} status: Status
-    + Progress(index: int, total: int, url: String, status: Status)
-}
-
-BatchUrlImporter +-- BatchStatus
-BatchUrlImporter +-- BatchResult
-BatchUrlImporter +-- BatchProgress
-BatchProgress --> BatchStatus
-
-class IngredientNormalizer <<utility>> {
-    - IngredientNormalizer()
-    + {static} buildPrompt(names: List<String>): String
-    + {static} parseGroups(json: String): List<VariantGroup>
-    + {static} filterExisting(groups: List<VariantGroup>, master: IngredientMaster): List<VariantGroup>
-    + {static} apply(groups: List<VariantGroup>, master: IngredientMaster, recipeList: AllRecipeList): ApplyResult
-}
-
-class "IngredientNormalizer.VariantGroup" as VariantGroup {
-    + {final} canonical: String
-    + {final} variants: List<String>
-}
-
-class "IngredientNormalizer.ApplyResult" as ApplyResult {
-    + {final} mergedNames: int
-    + {final} updatedRecipes: int
-}
-
-note right of IngredientNormalizer
-  食材名の表記ゆれをAIで統一する処理。
-  buildPrompt→(RecipeAIService.chat)→parseGroups で
-  検出し、filterExisting で実在する名前に絞り込み、
-  apply でマスタとレシピを書き換える。
-  AI実装には依存せず文字列入出力のみを扱う。
-end note
-
-IngredientNormalizer +-- VariantGroup
-IngredientNormalizer +-- ApplyResult
-IngredientNormalizer ..> IngredientMaster : replaceAll で集約
-IngredientNormalizer ..> AllRecipeList : updateRecipe で置換
-RecipeAIService ..> IngredientNormalizer : buildPrompt / parseGroups
-IngredientMasterPanel ..> RecipeAIService : 表記ゆれ検出
-IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
-
-' ===== 永続化層 =====
-class RecipeRepository {
-    - {final} dbPath: String
-    - {final} ingredientMaster: IngredientMaster
-    + RecipeRepository(dbPath: String, ingredientMaster: IngredientMaster)
-    + {static} resolveDbPath(): String
-    - connect(): Connection
-    - ensureSchema(): void
-    + findAll(): List<Recipe>
-    + insert(recipe: Recipe): long
-    + update(recipe: Recipe): void
-    + delete(id: long): void
-}
-
-class "RecipeRepository.RecipeBuilder" as RecipeBuilder {
-    ~ {final} id: long
-    ~ {final} title: String
-    ~ {final} url: String
-    ~ {final} ingredients: ArrayList<Ingredient>
-    ~ {final} categories: EnumSet<RecipeCategory>
-}
-
-RecipeRepository +-- RecipeBuilder
-
-' ===== ユーティリティ =====
-class JsonUtil <<utility>> {
-    - JsonUtil()
-    + {static} escape(s: String): String
-    + {static} unescape(s: String): String
-    + {static} extractString(json: String, key: String): String
-    + {static} extractStringArray(json: String, key: String): List<String>
-    + {static} extractObjectArray(json: String, key: String): List<String>
-    + {static} extractAllStrings(json: String, key: String): List<String>
-    + {static} findUnescapedQuote(s: String, pos: int): int
-    + {static} findMatchingBracket(s: String, start: int, open: char, close: char): int
-    - {static} findValueStart(json: String, key: String, from: int): int
-    - {static} skipWhitespace(s: String, pos: int): int
-}
-
+package "JsonUtil"{
+    class JsonUtil <<utility>> {
+        - JsonUtil()
+        + {static} escape(s: String): String
+        + {static} unescape(s: String): String
+        + {static} extractString(json: String, key: String): String
+        + {static} extractStringArray(json: String, key: String): List<String>
+        + {static} extractObjectArray(json: String, key: String): List<String>
+        + {static} extractAllStrings(json: String, key: String): List<String>
+        + {static} findUnescapedQuote(s: String, pos: int): int
+        + {static} findMatchingBracket(s: String, start: int, open: char, close: char): int
+        - {static} findValueStart(json: String, key: String, from: int): int
+        - {static} skipWhitespace(s: String, pos: int): int
+    }
 note right of JsonUtil
   外部ライブラリを使わない簡易JSON処理。
   AIレスポンス解析・レシピJSON入出力・
   表記ゆれ結果の解析はすべてここを経由する。
 end note
-
-class WebPageFetcher <<utility>> {
-    - {static} MAX_BYTES: int = 200_000
-    - {static} MAX_TEXT_LENGTH: int = 3000
-    - {static} CONNECT_TIMEOUT_MS: int = 5000
-    - {static} READ_TIMEOUT_MS: int = 5000
-    - WebPageFetcher()
-    + {static} fetchSummary(url: String): String
-    - {static} readBytes(is: InputStream, maxBytes: int): byte[]
-    - {static} detectCharset(contentType: String, htmlSnippet: String): Charset
-    - {static} htmlToText(html: String): String
 }
+package "AI"{
+    class WebPageFetcher <<utility>> {
+        - {static} MAX_BYTES: int = 200_000
+        - {static} MAX_TEXT_LENGTH: int = 3000
+        - {static} CONNECT_TIMEOUT_MS: int = 5000
+        - {static} READ_TIMEOUT_MS: int = 5000
+        - WebPageFetcher()
+        + {static} fetchSummary(url: String): String
+        - {static} readBytes(is: InputStream, maxBytes: int): byte[]
+        - {static} detectCharset(contentType: String, htmlSnippet: String): Charset
+        - {static} htmlToText(html: String): String
+    }
 
-class YoutubeMetadataFetcher <<utility>> {
-    - {static} CONNECT_TIMEOUT_MS: int = 5000
-    - {static} READ_TIMEOUT_MS: int = 8000
-    - {static} MAX_TRANSCRIPT_LENGTH: int = 4000
-    - {static} DESCRIPTION_SUFFICIENT_THRESHOLD: int = 150
-    - YoutubeMetadataFetcher()
-    ~ {static} isYoutubeUrl(url: String): boolean
-    + {static} fetchSummary(url: String, ingredientNames: List<String>): String
-    - {static} stripUrls(s: String): String
-    - {static} containsAnyIngredient(text: String, ingredientNames: List<String>): boolean
-    - {static} extractDescription(html: String): String
-    - {static} extractTranscript(html: String): String
-    ~ {static} extractVideoId(url: String): String
-    - {static} fetchTitle(videoUrl: String): String
-    - {static} parseTranscriptXml(xml: String): String
-    - {static} httpGet(url: String, accept: String): String
+    class YoutubeMetadataFetcher <<utility>> {
+        - {static} CONNECT_TIMEOUT_MS: int = 5000
+        - {static} READ_TIMEOUT_MS: int = 8000
+        - {static} MAX_TRANSCRIPT_LENGTH: int = 4000
+        - {static} DESCRIPTION_SUFFICIENT_THRESHOLD: int = 150
+        - YoutubeMetadataFetcher()
+        ~ {static} isYoutubeUrl(url: String): boolean
+        + {static} fetchSummary(url: String, ingredientNames: List<String>): String
+        - {static} stripUrls(s: String): String
+        - {static} containsAnyIngredient(text: String, ingredientNames: List<String>): boolean
+        - {static} extractDescription(html: String): String
+        - {static} extractTranscript(html: String): String
+        ~ {static} extractVideoId(url: String): String
+        - {static} fetchTitle(videoUrl: String): String
+        - {static} parseTranscriptXml(xml: String): String
+        - {static} httpGet(url: String, accept: String): String
+    }
+
+    class WhisperTranscriber <<utility>> {
+        - {static} TRANSCRIBE_TIMEOUT_SEC: long = 600
+        - WhisperTranscriber()
+        - {static} isWindows(): boolean
+        - {static} executableName(baseName: String): String
+        + {static} isAvailable(): boolean
+        + {static} transcribe(youtubeUrl: String): String
+        - {static} runProcess(workingDir: Path, timeoutSec: long, command: String...): int
+        - {static} locateTool(baseName: String): Path
+        - {static} findOnSystemPath(exeName: String): Path
+        - {static} locateWhisperCli(): Path
+        - {static} locateModel(): Path
+        - {static} toolsDirCandidates(): Path[]
+        - {static} modelDirCandidates(): Path[]
+        - {static} deleteRecursively(root: Path): void
+    }
+
+    ' 暗号化層
+    class SecureKeyStore {
+        - {static} ALGO: String = "AES/GCM/NoPadding"
+        - {static} GCM_TAG_BITS: int = 128
+        - {static} IV_BYTES: int = 12
+        - {static} KEY_BYTES: int = 32
+        - {final} masterKey: SecretKey
+        - {final} random: SecureRandom
+        + SecureKeyStore()
+        - {static} keyFilePath(): Path
+        - loadOrCreateMasterKey(): SecretKey
+        - {static} tryRestrictPermissions(p: Path): void
+        + encrypt(plain: String): String
+        + decrypt(ciphertextB64: String): String
+    }
+
+    class ApiKeyStore {
+        - {static} PREF_PREFIX: String = "apiKey."
+        - {final} secure: SecureKeyStore
+        - {final} prefs: Preferences
+        + ApiKeyStore(secure: SecureKeyStore, prefs: Preferences)
+        + getKey(provider: Provider): String
+        + setKey(provider: Provider, plainKey: String): void
+    }
+
+    'AI制御層
+    class RecipeAIService {
+        - selectedProvider: Provider
+        - apiKey: String
+        - modelName: String
+        - llamaCppUrl: String
+        + setConfig(provider: Provider, apiKey: String, modelName: String): void
+        + setLlamaCppUrl(url: String): void
+        + suggestRecipe(url: String, allIngredients: ArrayList<Ingredient>): String[]
+        + detectIngredientVariants(names: List<String>): List<VariantGroup>
+        + getModelsForProvider(provider: Provider): String[]
+        + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
+        - ensureConfigured(): void
+        - createProvider(provider: Provider): AbstractRecipeAIProvider
+    }
+
+    enum "RecipeAIService.Provider" as Provider {
+        OPENAI
+        GEMINI
+        CLAUDE
+        OLLAMA
+        LLAMA_CPP
+        --
+        + requiresApiKey(): boolean
+    }
+
+    abstract class AbstractRecipeAIProvider {
+        + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
+        + {abstract} getAvailableModels(): String[]
+        + generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
+        + fetchAvailableModels(apiKey: String): String[]
+        # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
+        # parseRecipeJson(text: String): String[]
+        - stripBrackets(s: String): String
+        # {static} readStream(stream: InputStream): String
+        # extractContent(jsonRes: String, contentKey: String): String
+    }
+
+    note right of AbstractRecipeAIProvider
+      chat は任意プロンプト→モデル本文(JSON)を返す
+      汎用呼び出しで、各具象が実装する。
+      generateRecipe は chat にレシピ用プロンプトを送り
+      parseRecipeJson で解析する共通実装。
+      動画を添付する Gemini のみオーバーライドする。
+      各具象は post/buildBody でHTTPを共通化。
+    end note
+
+    class OpenAIProvider {
+        + chat(apiKey, modelName, prompt): String
+        + fetchAvailableModels(apiKey: String): String[]
+        - {static} buildBody(modelName: String, prompt: String): String
+        - post(apiKey: String, body: String): String
+        - {static} isChatModel(id: String): boolean
+        + getAvailableModels(): String[]
+    }
+
+    class GeminiProvider {
+        + generateRecipe(...): String[]
+        + chat(apiKey, modelName, prompt): String
+        - postWithRetry(urlStr: String, json: String): String
+        ~ {static} canonicalYoutubeUrl(url: String): String
+        + fetchAvailableModels(apiKey: String): String[]
+        + getAvailableModels(): String[]
+    }
+
+    class ClaudeProvider {
+        + chat(apiKey, modelName, prompt): String
+        - {static} buildBody(modelName: String, prompt: String): String
+        - post(apiKey: String, body: String): String
+        + fetchAvailableModels(apiKey: String): String[]
+        + getAvailableModels(): String[]
+    }
+
+    class OllamaProvider {
+        - {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
+        - {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
+        + fetchAvailableModels(apiKey: String): String[]
+        + chat(apiKey, modelName, prompt): String
+        - post(modelName: String, prompt: String): String
+        + getAvailableModels(): String[]
+    }
+
+    class LlamaCppProvider {
+        - {final} baseUrl: String
+        + LlamaCppProvider(baseUrl: String)
+        ~ {static} normalizeUrl(url: String): String
+        + fetchAvailableModels(apiKey: String): String[]
+        + chat(apiKey, modelName, prompt): String
+        - {static} buildBody(modelName: String, prompt: String): String
+        - post(body: String): String
+        + getAvailableModels(): String[]
+    }
+
+    note right of LlamaCppProvider
+      llama-server の OpenAI互換API(/v1/chat/completions)に接続。
+      URLはAI設定で入力(初回は空欄=未設定。ポートは版により 9931 / 8080)。
+      model は /v1/models から選択(ルーターモードでは必須)。
+      enable_thinking=false で推論モデルの思考を止める。
+    end note
+
+    note right of OllamaProvider
+      モデルファミリ(Llama/Gemma/Mistral/Phi/Qwen等)で
+      APIの違いは無いため1クラスで全モデルを扱う。
+      getAvailableModels は Ollama 未起動時の
+      フォールバック(動作確認済みモデル一覧)。
+    end note
 }
-
-class WhisperTranscriber <<utility>> {
-    - {static} TRANSCRIBE_TIMEOUT_SEC: long = 600
-    - WhisperTranscriber()
-    - {static} isWindows(): boolean
-    - {static} executableName(baseName: String): String
-    + {static} isAvailable(): boolean
-    + {static} transcribe(youtubeUrl: String): String
-    - {static} runProcess(workingDir: Path, timeoutSec: long, command: String...): int
-    - {static} locateTool(baseName: String): Path
-    - {static} findOnSystemPath(exeName: String): Path
-    - {static} locateWhisperCli(): Path
-    - {static} locateModel(): Path
-    - {static} toolsDirCandidates(): Path[]
-    - {static} modelDirCandidates(): Path[]
-    - {static} deleteRecursively(root: Path): void
-}
-
-' 暗号化層
-class SecureKeyStore {
-    - {static} ALGO: String = "AES/GCM/NoPadding"
-    - {static} GCM_TAG_BITS: int = 128
-    - {static} IV_BYTES: int = 12
-    - {static} KEY_BYTES: int = 32
-    - {final} masterKey: SecretKey
-    - {final} random: SecureRandom
-    + SecureKeyStore()
-    - {static} keyFilePath(): Path
-    - loadOrCreateMasterKey(): SecretKey
-    - {static} tryRestrictPermissions(p: Path): void
-    + encrypt(plain: String): String
-    + decrypt(ciphertextB64: String): String
-}
-
-class ApiKeyStore {
-    - {static} PREF_PREFIX: String = "apiKey."
-    - {final} secure: SecureKeyStore
-    - {final} prefs: Preferences
-    + ApiKeyStore(secure: SecureKeyStore, prefs: Preferences)
-    + getKey(provider: Provider): String
-    + setKey(provider: Provider, plainKey: String): void
-}
-
-'AI制御層
-class RecipeAIService {
-    - selectedProvider: Provider
-    - apiKey: String
-    - modelName: String
-    - llamaCppUrl: String
-    + setConfig(provider: Provider, apiKey: String, modelName: String): void
-    + setLlamaCppUrl(url: String): void
-    + suggestRecipe(url: String, allIngredients: ArrayList<Ingredient>): String[]
-    + detectIngredientVariants(names: List<String>): List<VariantGroup>
-    + getModelsForProvider(provider: Provider): String[]
-    + fetchModelsForProvider(provider: Provider, apiKey: String): String[]
-    - ensureConfigured(): void
-    - createProvider(provider: Provider): AbstractRecipeAIProvider
-}
-
-enum "RecipeAIService.Provider" as Provider {
-    OPENAI
-    GEMINI
-    CLAUDE
-    OLLAMA
-    LLAMA_CPP
-    --
-    + requiresApiKey(): boolean
-}
-
-abstract class AbstractRecipeAIProvider {
-    + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
-    + {abstract} getAvailableModels(): String[]
-    + generateRecipe(apiKey: String, modelName: String, url: String, allIngredients: ArrayList<Ingredient>): String[]
-    + fetchAvailableModels(apiKey: String): String[]
-    # buildPrompt(url: String, allIngredients: ArrayList<Ingredient>): String
-    # parseRecipeJson(text: String): String[]
-    - stripBrackets(s: String): String
-    # {static} readStream(stream: InputStream): String
-    # extractContent(jsonRes: String, contentKey: String): String
-}
-
-note right of AbstractRecipeAIProvider
-  chat は任意プロンプト→モデル本文(JSON)を返す
-  汎用呼び出しで、各具象が実装する。
-  generateRecipe は chat にレシピ用プロンプトを送り
-  parseRecipeJson で解析する共通実装。
-  動画を添付する Gemini のみオーバーライドする。
-  各具象は post/buildBody でHTTPを共通化。
-end note
-
-class OpenAIProvider {
-    + chat(apiKey, modelName, prompt): String
-    + fetchAvailableModels(apiKey: String): String[]
-    - {static} buildBody(modelName: String, prompt: String): String
-    - post(apiKey: String, body: String): String
-    - {static} isChatModel(id: String): boolean
-    + getAvailableModels(): String[]
-}
-
-class GeminiProvider {
-    + generateRecipe(...): String[]
-    + chat(apiKey, modelName, prompt): String
-    - postWithRetry(urlStr: String, json: String): String
-    ~ {static} canonicalYoutubeUrl(url: String): String
-    + fetchAvailableModels(apiKey: String): String[]
-    + getAvailableModels(): String[]
-}
-
-class ClaudeProvider {
-    + chat(apiKey, modelName, prompt): String
-    - {static} buildBody(modelName: String, prompt: String): String
-    - post(apiKey: String, body: String): String
-    + fetchAvailableModels(apiKey: String): String[]
-    + getAvailableModels(): String[]
-}
-
-class OllamaProvider {
-    - {static} OLLAMA_URL: String = "http://localhost:11434/api/chat"
-    - {static} OLLAMA_TAGS_URL: String = "http://localhost:11434/api/tags"
-    + fetchAvailableModels(apiKey: String): String[]
-    + chat(apiKey, modelName, prompt): String
-    - post(modelName: String, prompt: String): String
-    + getAvailableModels(): String[]
-}
-
-class LlamaCppProvider {
-    - {final} baseUrl: String
-    + LlamaCppProvider(baseUrl: String)
-    ~ {static} normalizeUrl(url: String): String
-    + fetchAvailableModels(apiKey: String): String[]
-    + chat(apiKey, modelName, prompt): String
-    - {static} buildBody(modelName: String, prompt: String): String
-    - post(body: String): String
-    + getAvailableModels(): String[]
-}
-
-note right of LlamaCppProvider
-  llama-server の OpenAI互換API(/v1/chat/completions)に接続。
-  URLはAI設定で入力(初回は空欄=未設定。ポートは版により 9931 / 8080)。
-  model は /v1/models から選択(ルーターモードでは必須)。
-  enable_thinking=false で推論モデルの思考を止める。
-end note
-
-note right of OllamaProvider
-  モデルファミリ(Llama/Gemma/Mistral/Phi/Qwen等)で
-  APIの違いは無いため1クラスで全モデルを扱う。
-  getAvailableModels は Ollama 未起動時の
-  フォールバック(動作確認済みモデル一覧)。
-end note
-
 ' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
