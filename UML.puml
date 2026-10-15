@@ -289,9 +289,6 @@ package "Recipe"{
     IngredientNormalizer +-- ApplyResult
     IngredientNormalizer ..> IngredientMaster : replaceAll で集約
     IngredientNormalizer ..> AllRecipeList : updateRecipe で置換
-    RecipeAIService ..> IngredientNormalizer : buildPrompt / parseGroups
-    IngredientMasterPanel ..> RecipeAIService : 表記ゆれ検出
-    IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
 
     class RecipeRepository {
         - {final} dbPath: String
@@ -517,6 +514,11 @@ package "AI"{
       フォールバック(動作確認済みモデル一覧)。
     end note
 }
+
+' ===== 関係線 =====
+' 他パッケージのクラスを参照する関係線は、すべてのパッケージ宣言の後(ここ)に書く。
+' package { } の中で未宣言のクラス名を参照すると、そのパッケージ内に同名の空クラスが別途作られてしまう。
+
 ' UI層
 SwingMain --> AllRecipeList
 SwingMain --> IngredientMaster
@@ -577,6 +579,11 @@ RecipeRepository  ..> RecipeCategory   : stores enum name
 SwingMain        --> ApiKeyStore     : holds
 ApiKeyStore      --> SecureKeyStore  : delegates encryption
 SettingsPanel    ..> ApiKeyStore     : per-provider get/set
+
+' --- 表記ゆれ統一 ---
+RecipeAIService       ..> IngredientNormalizer : buildPrompt / parseGroups
+IngredientMasterPanel ..> RecipeAIService      : 表記ゆれ検出
+IngredientMasterPanel ..> IngredientNormalizer : 統一を適用
 
 ' --- AI層 ---
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
