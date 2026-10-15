@@ -10,26 +10,37 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * レシピ閲覧画面パネル（タイトル検索/食材検索/カテゴリ検索の3タブ構成）。
- * 各タブで選択中のレシピを編集パネルへ送る「編集」ボタンを持つ
+ * 各タブで選択中のレシピを編集パネルへ送る「編集」ボタンと、削除する「削除」ボタンを持つ
  */
 public class ViewRecipePanel extends JPanel {
 
     private final SwingMain owner;
+    /** 各タブのレシピ一覧モデル。削除したレシピを全タブから取り除くために保持する */
+    private final List<DefaultListModel<Recipe>> recipeModels = new ArrayList<>();
 
     /**
-     * 詳細表示エリア + 「編集」ボタンを縦に並べたパネルを生成する。
-     * source の選択が無いときは編集ボタンが無効化される。
+     * 詳細表示エリア + 「削除」「編集」ボタンを縦に並べたパネルを生成する。
+     * source で選択したレシピを詳細エリアに表示し、選択が無いときは詳細を消してボタンを無効化する。
      * @param detail 表示する詳細エリア
      * @param source 選択状態を監視する対象リスト
-     * @return 詳細エリアと編集ボタンをまとめたパネル
+     * @return 詳細エリアと操作ボタンをまとめたパネル
      */
-    private JPanel detailWithEditButton(JEditorPane detail, JList<Recipe> source) {
+    private JPanel detailWithActionButtons(JEditorPane detail, JList<Recipe> source) {
         JPanel container = new JPanel(new BorderLayout(0, 8));
         container.setOpaque(false);
         container.add(new JScrollPane(detail), BorderLayout.CENTER);
+
+        JButton btnDelete = new JButton("選択中のレシピを削除");
+        btnDelete.setBackground(Theme.COLOR_DELETE);
+        btnDelete.setForeground(Color.WHITE);
+        btnDelete.setOpaque(true);
+        btnDelete.setBorderPainted(false);
+        btnDelete.setEnabled(false);
+        btnDelete.addActionListener(e -> deleteSelected(source));
 
         JButton btnEdit = UIComponents.createPrimaryButton("選択中のレシピを編集");
         btnEdit.setEnabled(false);
@@ -37,13 +48,41 @@ public class ViewRecipePanel extends JPanel {
             Recipe r = source.getSelectedValue();
             if (r != null) owner.showPanel(new RegisterRecipePanel(owner, r));
         });
-        source.addListSelectionListener(e -> btnEdit.setEnabled(source.getSelectedValue() != null));
+
+        source.addListSelectionListener(e -> {
+            Recipe selected = source.getSelectedValue();
+            // 削除などで選択が外れた場合は、前のレシピが詳細に残らないよう消す
+            if (selected != null) UIComponents.updateDetailArea(detail, selected);
+            else detail.setText("");
+            btnDelete.setEnabled(selected != null);
+            btnEdit.setEnabled(selected != null);
+        });
 
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         bottom.setOpaque(false);
+        bottom.add(btnDelete);
+        bottom.add(Box.createRigidArea(new Dimension(8, 0)));
         bottom.add(btnEdit);
         container.add(bottom, BorderLayout.SOUTH);
         return container;
+    }
+
+    /**
+     * 選択中のレシピを確認のうえ削除し、全タブの一覧から取り除く。
+     * @param source 削除対象を選択しているリスト
+     */
+    private void deleteSelected(JList<Recipe> source) {
+        Recipe selected = source.getSelectedValue();
+        if (selected == null) return;
+        int result = JOptionPane.showConfirmDialog(this,
+                "本当に「" + selected.getTitle() + "」を削除しますか？",
+                "削除の確認", JOptionPane.YES_NO_OPTION);
+        if (result != JOptionPane.YES_OPTION) return;
+
+        owner.getAllRecipeList().deleteRecipe(selected);
+        for (DefaultListModel<Recipe> model : recipeModels) {
+            model.removeElement(selected);
+        }
     }
 
     /**
@@ -73,17 +112,13 @@ public class ViewRecipePanel extends JPanel {
 
         DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
         for (Recipe r : owner.getAllRecipeList().getRecipeList()) recipeListModel.addElement(r);
+        recipeModels.add(recipeListModel);
 
         JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
         JEditorPane detailArea = UIComponents.createDetailArea();
 
-        recipeListView.addListSelectionListener(e -> {
-            Recipe selected = recipeListView.getSelectedValue();
-            if (selected != null) UIComponents.updateDetailArea(detailArea, selected);
-        });
-
         titleTab.add(new JScrollPane(recipeListView), BorderLayout.WEST);
-        titleTab.add(detailWithEditButton(detailArea, recipeListView), BorderLayout.CENTER);
+        titleTab.add(detailWithActionButtons(detailArea, recipeListView), BorderLayout.CENTER);
         return titleTab;
     }
 
@@ -98,6 +133,7 @@ public class ViewRecipePanel extends JPanel {
         DefaultListModel<Ingredient> searchCondModel = new DefaultListModel<>();
         DefaultListModel<Ingredient> masterSearchModel = new DefaultListModel<>();
         DefaultListModel<Recipe> resultListModel = new DefaultListModel<>();
+        recipeModels.add(resultListModel);
 
         JList<Ingredient> searchCondList = new JList<>(searchCondModel);
         JList<Ingredient> masterSearchList = new JList<>(masterSearchModel);
@@ -122,11 +158,6 @@ public class ViewRecipePanel extends JPanel {
 
         JButton btnClearCond = new JButton("条件をクリア");
         btnClearCond.addActionListener(e -> searchCondModel.clear());
-
-        resultListView.addListSelectionListener(e -> {
-            Recipe selected = resultListView.getSelectedValue();
-            if (selected != null) UIComponents.updateDetailArea(searchDetailArea, selected);
-        });
 
         JButton btnSearch = UIComponents.createPrimaryButton("この食材をすべて含むレシピを検索");
         btnSearch.addActionListener(e -> {
@@ -157,7 +188,7 @@ public class ViewRecipePanel extends JPanel {
         JPanel resultPanel = new JPanel(new BorderLayout(10, 10));
         resultPanel.setOpaque(false);
         resultPanel.add(new JScrollPane(resultListView), BorderLayout.WEST);
-        resultPanel.add(detailWithEditButton(searchDetailArea, resultListView), BorderLayout.CENTER);
+        resultPanel.add(detailWithActionButtons(searchDetailArea, resultListView), BorderLayout.CENTER);
 
         ingTab.add(searchToolBox, BorderLayout.WEST);
         ingTab.add(resultPanel, BorderLayout.CENTER);
@@ -173,13 +204,9 @@ public class ViewRecipePanel extends JPanel {
         tab.setBorder(new EmptyBorder(20, 20, 20, 20));
 
         DefaultListModel<Recipe> recipeListModel = new DefaultListModel<>();
+        recipeModels.add(recipeListModel);
         JList<Recipe> recipeListView = UIComponents.createStyledRecipeList(recipeListModel);
         JEditorPane detailArea = UIComponents.createDetailArea();
-
-        recipeListView.addListSelectionListener(e -> {
-            Recipe selected = recipeListView.getSelectedValue();
-            if (selected != null) UIComponents.updateDetailArea(detailArea, selected);
-        });
 
         JComboBox<RecipeCategory> categoryCombo = new JComboBox<>(RecipeCategory.values());
         categoryCombo.setFont(Theme.FONT_MAIN);
@@ -211,7 +238,7 @@ public class ViewRecipePanel extends JPanel {
         leftPanel.add(new JScrollPane(recipeListView), BorderLayout.CENTER);
 
         tab.add(leftPanel, BorderLayout.WEST);
-        tab.add(detailWithEditButton(detailArea, recipeListView), BorderLayout.CENTER);
+        tab.add(detailWithActionButtons(detailArea, recipeListView), BorderLayout.CENTER);
         return tab;
     }
 }

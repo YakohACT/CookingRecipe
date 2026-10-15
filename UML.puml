@@ -63,15 +63,13 @@ class RegisterRecipePanel extends JPanel {
 
 class ViewRecipePanel extends JPanel {
     - owner: SwingMain
+    - recipeModels: List<DefaultListModel<Recipe>>
     + ViewRecipePanel(owner: SwingMain)
-    - detailWithEditButton(detail: JEditorPane, source: JList<Recipe>): JPanel
+    - detailWithActionButtons(detail: JEditorPane, source: JList<Recipe>): JPanel
+    - deleteSelected(source: JList<Recipe>): void
     - buildTitleTab(): JPanel
     - buildIngredientTab(): JPanel
     - buildCategoryTab(): JPanel
-}
-
-class DeleteRecipePanel extends JPanel {
-    + DeleteRecipePanel(owner: SwingMain)
 }
 
 class DataIOPanel extends JPanel {
@@ -524,7 +522,6 @@ SwingMain --> IngredientMaster
 SwingMain ..> RecipeAIService : createAiService で生成
 SwingMain o--> RegisterRecipePanel    : creates >
 SwingMain o--> ViewRecipePanel        : creates >
-SwingMain o--> DeleteRecipePanel      : creates >
 SwingMain o--> SettingsPanel          : creates >
 SwingMain o--> DataIOPanel            : creates >
 SwingMain o--> IngredientMasterPanel  : creates >
@@ -539,10 +536,10 @@ BatchUrlImporter ..> RecipeAIService
 BatchUrlImporter ..> IngredientMaster
 BatchUrlImporter ..> AllRecipeList
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
+ViewRecipePanel ..> AllRecipeList : deleteRecipe で削除
 
 RegisterRecipePanel ..> SwingMain
 ViewRecipePanel     ..> SwingMain
-DeleteRecipePanel   ..> SwingMain
 SettingsPanel       ..> SwingMain
 
 RegisterRecipePanel ..> RecipeAIService : uses
@@ -550,7 +547,6 @@ SettingsPanel       ..> RecipeAIService : uses
 
 RegisterRecipePanel ..> UIComponents
 ViewRecipePanel     ..> UIComponents
-DeleteRecipePanel   ..> UIComponents
 SettingsPanel       ..> UIComponents
 UIComponents        ..> Recipe
 UIComponents        ..> RecipeCategory
@@ -558,7 +554,6 @@ UIComponents        ..> RecipeCategory
 SwingMain           ..> Theme
 RegisterRecipePanel ..> Theme
 ViewRecipePanel     ..> Theme
-DeleteRecipePanel   ..> Theme
 SettingsPanel       ..> Theme
 
 RegisterRecipePanel ..> RecipeCategory : multi-select
