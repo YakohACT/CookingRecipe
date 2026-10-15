@@ -135,25 +135,25 @@ AIを登録している場合はURLを入力すると、自動的にタイトル
 ![RMP_View_Ingredient.png](Photo/RMP_View_Ingredient.png)
 
 #### カテゴリーから検索
-![RMP_View_Category.png](Photo/RMP_View_Category.png)
+![RMP_View_Category.png](Photo/RMP_View_Ingredient.png)
 
 ### AI設定
-![RMP_AI.png](Photo/RMP_AI.png)
+![RMP_AI_OPENAI.png](Photo/RMP_AI_OPENAI.png)
+ChatGPTとGeminiとClaudeはこんな画面\
+APIキーの入力すると、使えるAIモデルを全て選べるようになります。\
+APIを用いるため、**料金に注意**\
+**APIキーは暗号化した状態で保存します。**
 
-レシピ登録で利用するAIの設定を行います。
-AIは5種類から選べます。
-- ChatGPT
-- Gemini
-- Claude
-- Ollama
-- llama.cpp (`LLAMA_CPP`)
+![RMP_AI_OLLAMA.png](Photo/RMP_AI_OLLAMA.png)
+Ollamaはこんな画面\
+Ollamaを起動していれば、入っているAIモデルが全部選べるようになります。\
 
-ChatGPTとGeminiとClaudeはAPIキーを用いてオンライン上で、Ollamaとllama.cppはローカル環境で処理するものとなります。\
-llama.cppを選んだ場合は、APIキーの代わりに llama-server のURLを入力します(詳しくは[llama.cppを使う場合](#llamacppを使う場合)参照)。\
-AI設定は保存されます。 **APIキーは暗号化した状態で保存します。**
+![RMP_AI_LLAMACPP.png](Photo/RMP_AI_LLAMACPP.png)
+llama.cppはこんな画面\
+llamaを起動して、URLを入力すれば、AIモデルが選べるようになります。\
 
 ### レシピ管理
-![RMP_Manage_Ingredient.png](Photo/RMP_Manage_Ingredient.png)
+![RMP_RegistIngredient.png](Photo/RMP_RegistIngredient.png)
 各食材のカテゴリー変更と表示する順番の変更を行えます。\
 レシピの登録の食材は上から読み取るため、頻繁に使う食材を上にしておくことをおすすめします。\
 csvファイルを直接編集しても同じように反映されます。
