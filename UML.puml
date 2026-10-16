@@ -45,6 +45,7 @@ package "UI"{
         - stopEditing(): void
         - showIngredients(r: Recipe): void
         - prefillFromRecipe(r: Recipe): void
+        - selectCategories(cats: EnumSet<RecipeCategory>): void
         - buildHeader(btnAi: JButton): JPanel
         - requestAiSuggestion(btnAi: JButton): void
         - applyAiResult(suggestion: RecipeSuggestion): boolean
@@ -156,6 +157,9 @@ package "Recipe"{
         - displayName: String
         + getDisplayName(): String
         + toString(): String
+        + {static} displayNames(): List<String>
+        + {static} fromLabel(label: String): RecipeCategory
+        + {static} fromLabels(labels: List<String>): EnumSet<RecipeCategory>
     }
 
     class Ingredient {
@@ -441,7 +445,7 @@ package "AI"{
         - {final} llamaCppUrl: String
         + RecipeAIService(provider: Provider, apiKey: String, modelName: String, llamaCppUrl: String)
         + {static} isConfigured(provider: Provider, apiKey: String, llamaCppUrl: String): boolean
-        + suggestRecipe(url: String, ingredientNames: List<String>): RecipeSuggestion
+        + suggestRecipe(url: String, ingredientNames: List<String>, categoryNames: List<String>): RecipeSuggestion
         + chat(prompt: String): String
         + {static} defaultModels(provider: Provider): String[]
         + {static} fetchModels(provider: Provider, apiKey: String, llamaCppUrl: String): String[]
@@ -452,7 +456,8 @@ package "AI"{
     class RecipeSuggestion {
         + {final} title: String
         + {final} ingredients: List<Item>
-        + RecipeSuggestion(title: String, ingredients: List<Item>)
+        + {final} categories: List<String>
+        + RecipeSuggestion(title: String, ingredients: List<Item>, categories: List<String>)
     }
 
     class "RecipeSuggestion.Item" as SuggestionItem {
@@ -475,9 +480,9 @@ package "AI"{
     abstract class AbstractRecipeAIProvider {
         + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
         + {abstract} getAvailableModels(): String[]
-        + generateRecipe(apiKey: String, modelName: String, url: String, ingredientNames: List<String>): RecipeSuggestion
+        + generateRecipe(apiKey: String, modelName: String, url: String, ingredientNames: List<String>, categoryNames: List<String>): RecipeSuggestion
         + fetchAvailableModels(apiKey: String): String[]
-        # buildPrompt(url: String, ingredientNames: List<String>): String
+        # buildPrompt(url: String, ingredientNames: List<String>, categoryNames: List<String>): String
         # parseRecipeJson(text: String): RecipeSuggestion
         - {static} orEmpty(s: String): String
         - stripBrackets(s: String): String
@@ -558,6 +563,7 @@ BatchUrlImporter ..> RecipeAIService
 BatchUrlImporter ..> IngredientMaster
 BatchUrlImporter ..> AllRecipeList
 BatchUrlImporter ..> RecipeSuggestion : toRecipe で変換
+BatchUrlImporter ..> RecipeCategory : AIが選んだカテゴリーを fromLabels で変換
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 ViewRecipePanel ..> AllRecipeList : deleteRecipe で削除
 

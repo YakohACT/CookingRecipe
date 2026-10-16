@@ -35,18 +35,20 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String[] getAvailableModels();
 
     /**
-     * URLを参考にレシピ案(料理名と分量付きの食材)を生成する
+     * URLを参考にレシピ案(料理名・分量付きの食材・カテゴリー)を生成する
      * レシピ用プロンプトを {@link #chat} で送り、返ったJSONを解析する。
      * 動画の添付など独自のリクエストが必要なプロバイダーはオーバーライドする
      * @param apiKey          APIキー(ローカルLLMは未使用)
      * @param modelName       モデル名
      * @param url             レシピ参照URL
      * @param ingredientNames 利用可能な食材名のリスト
+     * @param categoryNames   選べるカテゴリーのラベル一覧
      * @return AIが提案したレシピ
      * @throws Exception API呼び出し/解析失敗時
      */
-    public RecipeSuggestion generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
-        return parseRecipeJson(chat(apiKey, modelName, buildPrompt(url, ingredientNames)));
+    public RecipeSuggestion generateRecipe(String apiKey, String modelName, String url,
+                                           List<String> ingredientNames, List<String> categoryNames) throws Exception {
+        return parseRecipeJson(chat(apiKey, modelName, buildPrompt(url, ingredientNames, categoryNames)));
     }
 
     /**
@@ -62,12 +64,13 @@ public abstract class AbstractRecipeAIProvider {
 
     /**
      * 食材候補からレシピを提案させるプロンプトを構築する
-     * 候補リストを先頭に置き、JSON形式での回答を強制
+     * 食材とカテゴリーの候補リストを先頭に置き、JSON形式での回答を強制
      * @param url             参照URL
      * @param ingredientNames 利用可能な食材名のリスト
+     * @param categoryNames   選べるカテゴリーのラベル一覧
      * @return AIへ送信するプロンプト文字列
      */
-    protected String buildPrompt(String url, List<String> ingredientNames) {
+    protected String buildPrompt(String url, List<String> ingredientNames, List<String> categoryNames) {
         String names = String.join(", ", ingredientNames);
 
         boolean isYoutube = YoutubeMetadataFetcher.isYoutubeUrl(url);
@@ -88,6 +91,8 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("あなたは日本の家庭料理のシェフです。\n\n");
         sb.append("【利用可能な食材】\n");
         sb.append(names).append("\n\n");
+        sb.append("【レシピのカテゴリー候補】\n");
+        sb.append(String.join(", ", categoryNames)).append("\n\n");
         if (!pageText.isEmpty()) {
             sb.append(isYoutube ? "【参考動画(指定URLから取得)】\n" : "【参考レシピページ(指定URLから取得)】\n");
             sb.append(pageText).append("\n\n");
@@ -99,6 +104,8 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("・各食材の分量は、参考ページや動画に記載されている分量をそのまま使うこと。記載が無い場合は一般的な家庭料理の分量を推定すること\n");
         sb.append("・分量は amount(数値だけ。例: \"200\", \"1/2\", \"1~2\")と unit(単位だけ。例: \"g\", \"ml\", \"個\", \"本\", \"大さじ\", \"小さじ\", \"カップ\")に分けること。「大さじ3」は amount=\"3\", unit=\"大さじ\" とする\n");
         sb.append("・「適量」「少々」のように数値が無い分量は amount を空文字にし、unit に「適量」「少々」を入れること\n");
+        sb.append("・categories には【レシピのカテゴリー候補】から、この料理に当てはまるものをすべて選ぶこと(例: 親子丼なら「ごはんもの」「肉料理」「卵料理」「和食」)\n");
+        sb.append("・カテゴリーは候補の表記をそのまま使い、候補に無い名前を作らないこと。当てはまるものが無ければ「その他」とする\n");
         sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
         if (isYoutube) {
             if (!pageText.isEmpty()) {
@@ -116,14 +123,17 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("  - name: 食材名 (文字列)。原則【利用可能な食材】リストの表記から選ぶこと\n");
         sb.append("  - amount: 数量 (文字列)\n");
         sb.append("  - unit: 単位 (文字列)\n");
+        sb.append("- categories: カテゴリーの配列 (文字列の配列)。【レシピのカテゴリー候補】の表記から選ぶこと\n");
         sb.append("例: {\"title\":\"親子丼\",\"ingredients\":[{\"name\":\"鶏もも\",\"amount\":\"200\",\"unit\":\"g\"},"
-                + "{\"name\":\"醤油\",\"amount\":\"2\",\"unit\":\"大さじ\"},{\"name\":\"三つ葉\",\"amount\":\"\",\"unit\":\"適量\"}]}\n");
+                + "{\"name\":\"醤油\",\"amount\":\"2\",\"unit\":\"大さじ\"},{\"name\":\"三つ葉\",\"amount\":\"\",\"unit\":\"適量\"}],"
+                + "\"categories\":[\"ごはんもの\",\"肉料理\",\"卵料理\",\"和食\"]}\n");
         return sb.toString();
     }
 
     /**
-     * モデルが返したレシピJSON({title, ingredients[{name, amount, unit}]})を解読するメソッド
+     * モデルが返したレシピJSON({title, ingredients[{name, amount, unit}], categories[]})を解読するメソッド
      * ingredients が食材名の文字列配列で返ってきた場合は、分量なしとして受け取る
+     * categories が配列でなく1つの文字列で返ってきた場合も受け取る
      * @param text モデル本文(unescape済みのJSON文字列)
      * @return AIが提案したレシピ(検出できなかった項目は空)
      */
@@ -145,7 +155,18 @@ public abstract class AbstractRecipeAIProvider {
                 if (!cleaned.isEmpty()) items.add(new RecipeSuggestion.Item(cleaned, "", ""));
             }
         }
-        return new RecipeSuggestion(title == null ? "" : stripBrackets(title), items);
+
+        List<String> labels = JsonUtil.extractStringArray(text, "categories");
+        if (labels.isEmpty()) {
+            String single = JsonUtil.extractString(text, "categories");
+            if (single != null) labels.add(single);
+        }
+        List<String> categories = new ArrayList<>();
+        for (String label : labels) {
+            String cleaned = stripBrackets(label);
+            if (!cleaned.isEmpty()) categories.add(cleaned);
+        }
+        return new RecipeSuggestion(title == null ? "" : stripBrackets(title), items, categories);
     }
 
     /**

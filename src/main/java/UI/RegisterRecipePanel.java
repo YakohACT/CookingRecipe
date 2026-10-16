@@ -218,9 +218,15 @@ public class RegisterRecipePanel extends JPanel {
         titleField.setText(r.getTitle());
         urlField.setText(r.getUrl());
         showIngredients(r);
-        // カテゴリーJListの選択インデックスを同期
+        selectCategories(r.getCategories());
+    }
+
+    /**
+     * カテゴリーの一覧で、指定したカテゴリーだけを選択状態にする。
+     * @param cats 選択するカテゴリー
+     */
+    private void selectCategories(EnumSet<RecipeCategory> cats) {
         RecipeCategory[] all = RecipeCategory.values();
-        EnumSet<RecipeCategory> cats = r.getCategories();
         int[] indices = new int[cats.size()];
         int idx = 0;
         for (int i = 0; i < all.length; i++) {
@@ -260,8 +266,8 @@ public class RegisterRecipePanel extends JPanel {
         SwingWorker<RecipeSuggestion, Void> worker = new SwingWorker<>() {
             @Override
             protected RecipeSuggestion doInBackground() throws Exception {
-                return owner.getAiSettings().createService().suggestRecipe(
-                        urlField.getText().trim(), owner.getIngredientMaster().getAllIngredientNames());
+                return owner.getAiSettings().createService().suggestRecipe(urlField.getText().trim(),
+                        owner.getIngredientMaster().getAllIngredientNames(), RecipeCategory.displayNames());
             }
 
             @Override
@@ -286,9 +292,10 @@ public class RegisterRecipePanel extends JPanel {
     }
 
     /**
-     * AIの返したレシピ(タイトル・食材・分量)をフォームに反映する。
+     * AIの返したレシピ(タイトル・食材・分量・カテゴリー)をフォームに反映する。
      * タイトルが空、または食材が0個の場合は「検出できなかった」と判断し、
-     * フォームには一切手を加えず false を返す。カテゴリーの選択は変更しない。
+     * フォームには一切手を加えず false を返す。
+     * AIがカテゴリーを1つも選べなかった場合は、カテゴリーの選択を変更しない。
      * @param suggestion AIが提案したレシピ
      * @return 反映に成功すれば true、検出失敗時は false
      */
@@ -299,6 +306,8 @@ public class RegisterRecipePanel extends JPanel {
 
         titleField.setText(suggested.getTitle());
         showIngredients(suggested);
+        EnumSet<RecipeCategory> aiCategories = RecipeCategory.fromLabels(suggestion.categories);
+        if (!aiCategories.isEmpty()) selectCategories(aiCategories);
         return true;
     }
 

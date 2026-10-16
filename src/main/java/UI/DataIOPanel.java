@@ -74,7 +74,7 @@ public class DataIOPanel extends JPanel {
                 "1行に1つの URL を記述したテキスト(.txt)ファイルを選び、各 URL を"
                 + " 現在選択中の AI プロバイダー(設定画面で選択中のもの)で順次解析して"
                 + " 一括登録します。空行と <code>#</code> から始まるコメント行は無視されます。"
-                + " カテゴリーは「その他」固定で登録されるため、必要に応じて後で編集してください。"));
+                + " カテゴリーも AI が選びます(選べなかった場合は「その他」)。必要に応じて後で編集してください。"));
         form.add(Box.createRigidArea(new Dimension(0, 8)));
 
         JButton btnBatch = UIComponents.createPrimaryButton("URLリストから一括登録…");

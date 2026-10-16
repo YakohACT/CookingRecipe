@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -144,7 +143,8 @@ public final class BatchUrlImporter {
 
             Status finalStatus = Status.FAILED;
             try {
-                RecipeSuggestion suggestion = aiService.suggestRecipe(url, master.getAllIngredientNames());
+                RecipeSuggestion suggestion = aiService.suggestRecipe(
+                        url, master.getAllIngredientNames(), RecipeCategory.displayNames());
                 Recipe recipe = toRecipe(suggestion, url, master);
                 if (recipe != null) {
                     recipeList.addRecipe(recipe);
@@ -174,7 +174,7 @@ public final class BatchUrlImporter {
      * @param suggestion AIが提案したレシピ
      * @param url        元のURL
      * @param master     食材マスタ
-     * @return 構築された Recipe(カテゴリーは OTHER)。タイトルが空/食材が0件なら null
+     * @return 構築された Recipe(AIがカテゴリーを選べなかった場合は「その他」)。タイトルが空/食材が0件なら null
      */
     public static Recipe toRecipe(RecipeSuggestion suggestion, String url, IngredientMaster master) {
         String title = suggestion.title.trim();
@@ -188,6 +188,6 @@ public final class BatchUrlImporter {
         }
 
         if (title.isEmpty() || matched.isEmpty()) return null;
-        return new Recipe(title, url, matched, quantities, EnumSet.of(RecipeCategory.OTHER));
+        return new Recipe(title, url, matched, quantities, RecipeCategory.fromLabels(suggestion.categories));
     }
 }
