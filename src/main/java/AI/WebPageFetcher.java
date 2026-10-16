@@ -5,7 +5,7 @@ import main.java.Util.JsonUtil;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -36,7 +36,7 @@ public final class WebPageFetcher {
     public static String fetchSummary(String url) {
         if (url == null || url.trim().isEmpty()) return "";
         try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(url.trim()).openConnection();
+            HttpURLConnection conn = (HttpURLConnection) URI.create(url.trim()).toURL().openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; RecipeManager/1.0)");
             conn.setRequestProperty("Accept", "text/html,application/xhtml+xml");

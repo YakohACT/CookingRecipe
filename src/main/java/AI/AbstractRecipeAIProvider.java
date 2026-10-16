@@ -8,7 +8,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -219,7 +219,7 @@ public abstract class AbstractRecipeAIProvider {
      */
     protected static HttpURLConnection openJsonPost(String url, String body, int connectMs, int readMs,
                                                     String... headerPairs) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         for (int i = 0; i + 1 < headerPairs.length; i += 2) {
@@ -262,7 +262,7 @@ public abstract class AbstractRecipeAIProvider {
      */
     protected static String httpGetOrNull(String url, int connectMs, int readMs, String... headerPairs) {
         try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
             conn.setRequestMethod("GET");
             for (int i = 0; i + 1 < headerPairs.length; i += 2) {
                 conn.setRequestProperty(headerPairs[i], headerPairs[i + 1]);
