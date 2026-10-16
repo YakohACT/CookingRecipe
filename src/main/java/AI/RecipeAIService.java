@@ -54,14 +54,14 @@ public class RecipeAIService {
     }
 
     /**
-     * 設定済みプロバイダーへレシピ提案を依頼する。
+     * 設定済みプロバイダーへレシピ提案(料理名と分量付きの食材)を依頼する。
      * APIキー(llama.cpp はサーバーURL)が未設定の場合は例外を投げる。
      * @param url             参照URL
      * @param ingredientNames 利用可能な食材名のリスト
-     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @return AIが提案したレシピ
      * @throws Exception API呼び出し失敗時 / 未設定時
      */
-    public String[] suggestRecipe(String url, List<String> ingredientNames) throws Exception {
+    public RecipeSuggestion suggestRecipe(String url, List<String> ingredientNames) throws Exception {
         ensureConfigured();
         return createProvider(provider, llamaCppUrl).generateRecipe(apiKey, modelName, url, ingredientNames);
     }

@@ -28,18 +28,26 @@ class SwingMain extends JFrame {
 
 package "UI"{
     class RegisterRecipePanel extends JPanel {
+        - {static} COL_INGREDIENT: int = 0
+        - {static} COL_AMOUNT: int = 1
+        - {static} COL_UNIT: int = 2
         - owner: SwingMain
         - editTarget: Recipe
         - titleField: JTextField
         - urlField: JTextField
         - categoryList: JList<RecipeCategory>
-        - selectedListModel: DefaultListModel<Ingredient>
+        - selectedModel: DefaultTableModel
+        - selectedTable: JTable
         + RegisterRecipePanel(owner: SwingMain)
         + RegisterRecipePanel(owner: SwingMain, editTarget: Recipe)
+        - buildSelectedTable(): JTable
+        - addIngredientRow(ing: Ingredient, quantity: Quantity): void
+        - stopEditing(): void
+        - showIngredients(r: Recipe): void
         - prefillFromRecipe(r: Recipe): void
         - buildHeader(btnAi: JButton): JPanel
         - requestAiSuggestion(btnAi: JButton): void
-        - applyAiResult(result: String[]): boolean
+        - applyAiResult(suggestion: RecipeSuggestion): boolean
         - submitRecipe(): void
     }
 
@@ -166,14 +174,39 @@ package "Recipe"{
         - title: String
         - url: String
         - ingredients: ArrayList<Ingredient>
+        - quantities: Map<String, Quantity>
         - categories: EnumSet<RecipeCategory>
-        + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>, categories: EnumSet<RecipeCategory>)
+        + Recipe(title: String, url: String, ingredients: ArrayList<Ingredient>, quantities: Map<String, Quantity>, categories: EnumSet<RecipeCategory>)
         + getId(): long
         + setId(id: long): void
         + getTitle(): String
         + getUrl(): String
         + getIngredients(): ArrayList<Ingredient>
+        + getQuantity(ingredient: Ingredient): Quantity
         + getCategories(): EnumSet<RecipeCategory>
+    }
+
+    class Quantity {
+        + {static} EMPTY: Quantity
+        + {static} COMMON_UNITS: List<String>
+        - {static} PREFIX_UNITS: Set<String>
+        - {static} UNIT_ONLY: Set<String>
+        - {static} NUMBER: String
+        - {static} NUMBER_ONLY: Pattern
+        - {static} PREFIX_FORM: Pattern
+        - {static} SUFFIX_FORM: Pattern
+        - {final} amount: String
+        - {final} unit: String
+        - Quantity(amount: String, unit: String)
+        + {static} of(amount: String, unit: String): Quantity
+        + {static} parse(text: String): Quantity
+        - {static} toHalfWidth(s: String): String
+        + getAmount(): String
+        + getUnit(): String
+        + isEmpty(): boolean
+        + toString(): String
+        + equals(o: Object): boolean
+        + hashCode(): int
     }
 
     class IngredientMaster {
@@ -184,7 +217,6 @@ package "Recipe"{
         + searchIngredient(category: IngredientCategory): ArrayList<Ingredient>
         + getAllIngredients(): ArrayList<Ingredient>
         + getAllIngredientNames(): List<String>
-        + resolveAll(commaSeparatedNames: String): ArrayList<Ingredient>
         + replaceAll(ordered: List<Ingredient>): void
         - saveCsv(): void
         + addIngredient(name: String): Ingredient
@@ -215,7 +247,7 @@ package "Recipe"{
         - BatchUrlImporter()
         + {static} readUrls(file: Path): List<String>
         + {static} importAll(urls: List<String>, aiService: RecipeAIService, master: IngredientMaster, recipeList: AllRecipeList, onProgress: Consumer<Progress>, cancelCheck: BooleanSupplier): Result
-        - {static} buildRecipe(result: String[], url: String, master: IngredientMaster): Recipe
+        + {static} toRecipe(suggestion: RecipeSuggestion, url: String, master: IngredientMaster): Recipe
     }
 
     enum "BatchUrlImporter.Status" as BatchStatus {
@@ -283,6 +315,7 @@ package "Recipe"{
         + insert(recipe: Recipe): long
         + update(recipe: Recipe): void
         - insertChildren(conn: Connection, id: long, recipe: Recipe): void
+        - addQuantityColumnsIfMissing(conn: Connection): void
         + delete(id: long): void
     }
 
@@ -291,6 +324,7 @@ package "Recipe"{
         ~ {final} title: String
         ~ {final} url: String
         ~ {final} ingredients: ArrayList<Ingredient>
+        ~ {final} quantities: Map<String, Quantity>
         ~ {final} categories: EnumSet<RecipeCategory>
         ~ RecipeBuilder(id: long, title: String, url: String)
     }
@@ -304,6 +338,7 @@ package "Util"{
         + {static} escape(s: String): String
         + {static} unescape(s: String): String
         + {static} extractString(json: String, key: String): String
+        + {static} extractScalar(json: String, key: String): String
         + {static} extractStringArray(json: String, key: String): List<String>
         + {static} extractObjectArray(json: String, key: String): List<String>
         + {static} extractAllStrings(json: String, key: String): List<String>
@@ -323,6 +358,7 @@ package "AI"{
         - WebPageFetcher()
         + {static} fetchSummary(url: String): String
         - {static} readBytes(is: InputStream, maxBytes: int): byte[]
+        - {static} extractRecipeIngredients(html: String): String
         - {static} detectCharset(contentType: String, htmlSnippet: String): Charset
         - {static} htmlToText(html: String): String
     }
@@ -405,12 +441,25 @@ package "AI"{
         - {final} llamaCppUrl: String
         + RecipeAIService(provider: Provider, apiKey: String, modelName: String, llamaCppUrl: String)
         + {static} isConfigured(provider: Provider, apiKey: String, llamaCppUrl: String): boolean
-        + suggestRecipe(url: String, ingredientNames: List<String>): String[]
+        + suggestRecipe(url: String, ingredientNames: List<String>): RecipeSuggestion
         + chat(prompt: String): String
         + {static} defaultModels(provider: Provider): String[]
         + {static} fetchModels(provider: Provider, apiKey: String, llamaCppUrl: String): String[]
         - ensureConfigured(): void
         - {static} createProvider(provider: Provider, llamaCppUrl: String): AbstractRecipeAIProvider
+    }
+
+    class RecipeSuggestion {
+        + {final} title: String
+        + {final} ingredients: List<Item>
+        + RecipeSuggestion(title: String, ingredients: List<Item>)
+    }
+
+    class "RecipeSuggestion.Item" as SuggestionItem {
+        + {final} name: String
+        + {final} amount: String
+        + {final} unit: String
+        + Item(name: String, amount: String, unit: String)
     }
 
     enum "RecipeAIService.Provider" as Provider {
@@ -426,10 +475,11 @@ package "AI"{
     abstract class AbstractRecipeAIProvider {
         + {abstract} chat(apiKey: String, modelName: String, prompt: String): String
         + {abstract} getAvailableModels(): String[]
-        + generateRecipe(apiKey: String, modelName: String, url: String, ingredientNames: List<String>): String[]
+        + generateRecipe(apiKey: String, modelName: String, url: String, ingredientNames: List<String>): RecipeSuggestion
         + fetchAvailableModels(apiKey: String): String[]
         # buildPrompt(url: String, ingredientNames: List<String>): String
-        # parseRecipeJson(text: String): String[]
+        # parseRecipeJson(text: String): RecipeSuggestion
+        - {static} orEmpty(s: String): String
         - stripBrackets(s: String): String
         # {static} readStream(stream: InputStream): String
         # {static} openJsonPost(url: String, body: String, connectMs: int, readMs: int, headerPairs: String...): HttpURLConnection
@@ -449,7 +499,7 @@ package "AI"{
 
     class GeminiProvider {
         - {static} API_BASE: String
-        + generateRecipe(...): String[]
+        + generateRecipe(...): RecipeSuggestion
         + chat(apiKey, modelName, prompt): String
         - {static} generateContentUrl(apiKey: String, modelName: String): String
         - postWithRetry(urlStr: String, json: String): String
@@ -507,6 +557,7 @@ IngredientMasterPanel ..> UIComponents
 BatchUrlImporter ..> RecipeAIService
 BatchUrlImporter ..> IngredientMaster
 BatchUrlImporter ..> AllRecipeList
+BatchUrlImporter ..> RecipeSuggestion : toRecipe で変換
 ViewRecipePanel ..> RegisterRecipePanel : opens edit >
 ViewRecipePanel ..> AllRecipeList : deleteRecipe で削除
 
@@ -520,10 +571,13 @@ SettingsPanel       ..> RecipeAIService : モデル一覧の取得
 UIComponents        ..> AiSettings : ensureAiReady
 
 RegisterRecipePanel ..> UIComponents
+RegisterRecipePanel ..> BatchUrlImporter : toRecipe でAI提案を反映
+RegisterRecipePanel ..> Quantity : 数量と単位の入力
 ViewRecipePanel     ..> UIComponents
 SettingsPanel       ..> UIComponents
 UIComponents        ..> Recipe
 UIComponents        ..> RecipeCategory
+UIComponents        ..> Quantity : 分量の表示
 
 SwingMain           ..> Theme
 RegisterRecipePanel ..> Theme
@@ -535,6 +589,7 @@ ViewRecipePanel     ..> RecipeCategory : filter
 
 AllRecipeList "1" *-- "many" Recipe
 Recipe "many" o-- "many" Ingredient
+Recipe "1" *-- "many" Quantity : 食材ごとの分量
 Recipe "many" -- "many" RecipeCategory
 Ingredient "many" -- "1" IngredientCategory
 IngredientMaster "1" *-- "many" Ingredient
@@ -553,6 +608,9 @@ IngredientMasterPanel ..> IngredientNormalizer : 検出と統一の適用
 
 RecipeAIService     o--> AbstractRecipeAIProvider : delegates to >
 RecipeAIService     +-- Provider
+RecipeAIService     ..> RecipeSuggestion : suggestRecipe の戻り値
+RecipeSuggestion    +-- SuggestionItem
+AbstractRecipeAIProvider ..> RecipeSuggestion : parseRecipeJson で生成
 AbstractRecipeAIProvider ..> WebPageFetcher : fetches non-YouTube URL
 AbstractRecipeAIProvider ..> YoutubeMetadataFetcher : fetches YouTube title+transcript
 YoutubeMetadataFetcher   ..> WhisperTranscriber : fallback when no captions
@@ -562,6 +620,7 @@ GeminiProvider      ..> YoutubeMetadataFetcher : 動画IDの抽出
 AbstractRecipeAIProvider ..> JsonUtil
 YoutubeMetadataFetcher   ..> JsonUtil
 RecipeIO                 ..> JsonUtil
+WebPageFetcher           ..> JsonUtil
 IngredientNormalizer     ..> JsonUtil
 
 AbstractRecipeAIProvider <|-- OpenAIProvider

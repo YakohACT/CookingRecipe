@@ -19,7 +19,7 @@ import java.util.Properties;
  * テーブル構成:
  * - recipes(id, title, url)
  * - recipe_categories(recipe_id, category)  ※ enum 名(英語)を保存
- * - recipe_ingredients(recipe_id, ingredient_name, sort_order)
+ * - recipe_ingredients(recipe_id, ingredient_name, sort_order, amount, unit)
  */
 public class RecipeRepository {
 
@@ -80,6 +80,7 @@ public class RecipeRepository {
 
     /**
      * 必要な3テーブル(recipes / recipe_categories / recipe_ingredients)を作成するメソッド
+     * 分量の列(amount / unit)が無い古いDBには列を追加する
      */
     private void ensureSchema() {
         try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
@@ -101,11 +102,37 @@ public class RecipeRepository {
                     "  recipe_id       INTEGER NOT NULL," +
                     "  ingredient_name TEXT NOT NULL," +
                     "  sort_order      INTEGER NOT NULL," +
+                    "  amount          TEXT NOT NULL DEFAULT ''," +
+                    "  unit            TEXT NOT NULL DEFAULT ''," +
                     "  PRIMARY KEY (recipe_id, sort_order)," +
                     "  FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE" +
                     ")");
+            addQuantityColumnsIfMissing(conn);
         } catch (SQLException e) {
             throw new RuntimeException("SQLiteの初期化に失敗しました(sqlite-jdbcがクラスパスにあるか確認してください): " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 分量の列が追加される前に作られた recipe_ingredients に amount / unit 列を追加するメソッド
+     * 既存の行は分量なし(空文字)になる
+     * @param conn 接続
+     * @throws SQLException 列の確認/追加に失敗した場合
+     */
+    private void addQuantityColumnsIfMissing(Connection conn) throws SQLException {
+        boolean hasAmount = false;
+        boolean hasUnit = false;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(recipe_ingredients)")) {
+            while (rs.next()) {
+                String column = rs.getString("name");
+                if ("amount".equals(column)) hasAmount = true;
+                if ("unit".equals(column)) hasUnit = true;
+            }
+        }
+        try (Statement stmt = conn.createStatement()) {
+            if (!hasAmount) stmt.execute("ALTER TABLE recipe_ingredients ADD COLUMN amount TEXT NOT NULL DEFAULT ''");
+            if (!hasUnit) stmt.execute("ALTER TABLE recipe_ingredients ADD COLUMN unit TEXT NOT NULL DEFAULT ''");
         }
     }
 
@@ -138,14 +165,16 @@ public class RecipeRepository {
             }
 
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT recipe_id, ingredient_name FROM recipe_ingredients ORDER BY recipe_id, sort_order");
+                    "SELECT recipe_id, ingredient_name, amount, unit FROM recipe_ingredients ORDER BY recipe_id, sort_order");
                  ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     RecipeBuilder b = builders.get(rs.getLong("recipe_id"));
                     if (b == null) continue;
                     // マスタに無い食材名は OTHER で自動追加(database.csv にも書き込む)
                     Ingredient ing = ingredientMaster.addIngredient(rs.getString("ingredient_name"));
-                    if (ing != null) b.ingredients.add(ing);
+                    if (ing == null) continue;
+                    b.ingredients.add(ing);
+                    b.quantities.put(ing.getName(), Quantity.of(rs.getString("amount"), rs.getString("unit")));
                 }
             }
         } catch (SQLException e) {
@@ -155,7 +184,7 @@ public class RecipeRepository {
         List<Recipe> result = new ArrayList<>();
         for (RecipeBuilder b : builders.values()) {
             // カテゴリーが空の場合は Recipe 側で OTHER になる
-            Recipe r = new Recipe(b.title, b.url, b.ingredients, b.categories);
+            Recipe r = new Recipe(b.title, b.url, b.ingredients, b.quantities, b.categories);
             r.setId(b.id);
             result.add(r);
         }
@@ -246,12 +275,15 @@ public class RecipeRepository {
         }
 
         try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO recipe_ingredients(recipe_id, ingredient_name, sort_order) VALUES (?, ?, ?)")) {
+                "INSERT INTO recipe_ingredients(recipe_id, ingredient_name, sort_order, amount, unit) VALUES (?, ?, ?, ?, ?)")) {
             int order = 0;
             for (Ingredient ing : recipe.getIngredients()) {
+                Quantity q = recipe.getQuantity(ing);
                 ps.setLong(1, id);
                 ps.setString(2, ing.getName());
                 ps.setInt(3, order++);
+                ps.setString(4, q.getAmount());
+                ps.setString(5, q.getUnit());
                 ps.executeUpdate();
             }
         }
@@ -278,6 +310,7 @@ public class RecipeRepository {
         final String title;
         final String url;
         final ArrayList<Ingredient> ingredients = new ArrayList<>();
+        final Map<String, Quantity> quantities = new LinkedHashMap<>();
         final EnumSet<RecipeCategory> categories = EnumSet.noneOf(RecipeCategory.class);
 
         /**

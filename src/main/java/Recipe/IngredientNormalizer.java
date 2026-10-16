@@ -183,6 +183,7 @@ public final class IngredientNormalizer {
         int updatedRecipes = 0;
         for (Recipe r : new ArrayList<>(recipeList.getRecipeList())) {
             ArrayList<Ingredient> newIngs = new ArrayList<>();
+            Map<String, Quantity> newQuantities = new HashMap<>();
             Set<String> seen = new HashSet<>();
             boolean changed = false;
             for (Ingredient ing : r.getIngredients()) {
@@ -190,15 +191,16 @@ public final class IngredientNormalizer {
                 String canon = toCanonical.getOrDefault(name, name);
                 if (!canon.equals(name)) changed = true;
                 if (!seen.add(canon)) {
-                    changed = true; // 同一レシピ内で重複する食材になったので除去
+                    changed = true; // 同一レシピ内で重複する食材になったので除去(分量は先に出てきた方を残す)
                     continue;
                 }
                 Ingredient resolved = masterAfter.get(canon);
                 newIngs.add(resolved != null ? resolved : new Ingredient(canon, ing.getCategory()));
+                newQuantities.put(canon, r.getQuantity(ing));
             }
             if (changed) {
                 EnumSet<RecipeCategory> cats = r.getCategories();
-                Recipe updated = new Recipe(r.getTitle(), r.getUrl(), newIngs, cats);
+                Recipe updated = new Recipe(r.getTitle(), r.getUrl(), newIngs, newQuantities, cats);
                 updated.setId(r.getId());
                 recipeList.updateRecipe(updated);
                 updatedRecipes++;

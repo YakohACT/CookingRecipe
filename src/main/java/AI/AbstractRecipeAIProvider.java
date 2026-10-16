@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -34,17 +35,17 @@ public abstract class AbstractRecipeAIProvider {
     public abstract String[] getAvailableModels();
 
     /**
-     * URLを参考にレシピ案(料理名と食材)を生成する
+     * URLを参考にレシピ案(料理名と分量付きの食材)を生成する
      * レシピ用プロンプトを {@link #chat} で送り、返ったJSONを解析する。
      * 動画の添付など独自のリクエストが必要なプロバイダーはオーバーライドする
-     * @param apiKey         APIキー(ローカルLLMは未使用)
-     * @param modelName      モデル名
+     * @param apiKey          APIキー(ローカルLLMは未使用)
+     * @param modelName       モデル名
      * @param url             レシピ参照URL
      * @param ingredientNames 利用可能な食材名のリスト
-     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @return AIが提案したレシピ
      * @throws Exception API呼び出し/解析失敗時
      */
-    public String[] generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
+    public RecipeSuggestion generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
         return parseRecipeJson(chat(apiKey, modelName, buildPrompt(url, ingredientNames)));
     }
 
@@ -95,6 +96,9 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("・食材は【利用可能な食材】リストから優先して選ぶこと。同じ役割の食材がリストにあれば、必ずそちらを使うこと(例: リストに「醤油」があるのに「だし醤油」と書かない)\n");
         sb.append("・リスト内の食材だけで成立しないレシピのときに限り、リスト外の食材名を使ってよい(その場合も最小限に留める)\n");
         sb.append("・食材名は【利用可能な食材】リストの表記をそのまま使うこと(例: リストの「鶏もも」を「鶏もも肉」と書き換えない)\n");
+        sb.append("・各食材の分量は、参考ページや動画に記載されている分量をそのまま使うこと。記載が無い場合は一般的な家庭料理の分量を推定すること\n");
+        sb.append("・分量は amount(数値だけ。例: \"200\", \"1/2\", \"1~2\")と unit(単位だけ。例: \"g\", \"ml\", \"個\", \"本\", \"大さじ\", \"小さじ\", \"カップ\")に分けること。「大さじ3」は amount=\"3\", unit=\"大さじ\" とする\n");
+        sb.append("・「適量」「少々」のように数値が無い分量は amount を空文字にし、unit に「適量」「少々」を入れること\n");
         sb.append("・前置き・補足・Markdown装飾・コードフェンスは一切禁止\n");
         if (isYoutube) {
             if (!pageText.isEmpty()) {
@@ -108,28 +112,49 @@ public abstract class AbstractRecipeAIProvider {
         sb.append("\n【出力形式】\n");
         sb.append("以下のキーを持つJSONオブジェクトのみを返してください。\n");
         sb.append("- title: 料理名 (文字列)\n");
-        sb.append("- ingredients: 食材名の配列 (文字列の配列)。原則【利用可能な食材】リストの表記から選ぶこと\n");
+        sb.append("- ingredients: 食材の配列。各要素は次のキーを持つオブジェクト\n");
+        sb.append("  - name: 食材名 (文字列)。原則【利用可能な食材】リストの表記から選ぶこと\n");
+        sb.append("  - amount: 数量 (文字列)\n");
+        sb.append("  - unit: 単位 (文字列)\n");
+        sb.append("例: {\"title\":\"親子丼\",\"ingredients\":[{\"name\":\"鶏もも\",\"amount\":\"200\",\"unit\":\"g\"},"
+                + "{\"name\":\"醤油\",\"amount\":\"2\",\"unit\":\"大さじ\"},{\"name\":\"三つ葉\",\"amount\":\"\",\"unit\":\"適量\"}]}\n");
         return sb.toString();
     }
 
     /**
-     * モデルが返したレシピJSON({title, ingredients[]})を解読し、
-     * {タイトル, 食材(カンマ連結)} の形に変換する
+     * モデルが返したレシピJSON({title, ingredients[{name, amount, unit}]})を解読するメソッド
+     * ingredients が食材名の文字列配列で返ってきた場合は、分量なしとして受け取る
      * @param text モデル本文(unescape済みのJSON文字列)
-     * @return [タイトル, "食材1,食材2,…"] の2要素配列
+     * @return AIが提案したレシピ(検出できなかった項目は空)
      */
-    protected String[] parseRecipeJson(String text) {
-        // フォールバックを空文字にすることで、UI側で「AIがレシピを検出できなかった」状態を判定できるようにする
+    protected RecipeSuggestion parseRecipeJson(String text) {
+        // フォールバックを空文字にすることで、呼び出し側で「AIがレシピを検出できなかった」状態を判定できるようにする
         String title = JsonUtil.extractString(text, "title");
 
-        StringBuilder joined = new StringBuilder();
-        for (String ing : JsonUtil.extractStringArray(text, "ingredients")) {
-            String cleaned = stripBrackets(ing);
+        List<RecipeSuggestion.Item> items = new ArrayList<>();
+        for (String obj : JsonUtil.extractObjectArray(text, "ingredients")) {
+            String name = JsonUtil.extractString(obj, "name");
+            String cleaned = name == null ? "" : stripBrackets(name);
             if (cleaned.isEmpty()) continue;
-            if (joined.length() > 0) joined.append(",");
-            joined.append(cleaned);
+            items.add(new RecipeSuggestion.Item(cleaned,
+                    orEmpty(JsonUtil.extractScalar(obj, "amount")), orEmpty(JsonUtil.extractScalar(obj, "unit"))));
         }
-        return new String[]{title == null ? "" : stripBrackets(title), joined.toString()};
+        if (items.isEmpty()) {
+            for (String ing : JsonUtil.extractStringArray(text, "ingredients")) {
+                String cleaned = stripBrackets(ing);
+                if (!cleaned.isEmpty()) items.add(new RecipeSuggestion.Item(cleaned, "", ""));
+            }
+        }
+        return new RecipeSuggestion(title == null ? "" : stripBrackets(title), items);
+    }
+
+    /**
+     * null を空文字に置き換えて前後の空白を除くメソッド
+     * @param s 元の文字列(null可)
+     * @return 整えた文字列
+     */
+    private static String orEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     /**

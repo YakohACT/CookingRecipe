@@ -135,21 +135,6 @@ public class IngredientMaster {
         return new ArrayList<>(database.keySet());
     }
 
-    /**
-     * カンマ区切りの食材名をマスタの食材に解決するメソッド
-     * 未登録の食材は OTHER カテゴリで追加し、同じ食材は1つにまとめる
-     * @param commaSeparatedNames "食材1,食材2,…" 形式の文字列(AIの提案結果など)
-     * @return 解決された食材のリスト(並び順は入力どおり)
-     */
-    public ArrayList<Ingredient> resolveAll(String commaSeparatedNames) {
-        ArrayList<Ingredient> result = new ArrayList<>();
-        if (commaSeparatedNames == null) return result;
-        for (String name : commaSeparatedNames.split(",")) {
-            Ingredient ing = addIngredient(name);
-            if (ing != null && !result.contains(ing)) result.add(ing);
-        }
-        return result;
-    }
 
     /**
      * メモリ上のdatabaseを引数のリストの内容で書き換え、database.csv全体を書き直す

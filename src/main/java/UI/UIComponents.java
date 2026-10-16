@@ -2,6 +2,7 @@ package main.java.UI;
 
 import main.java.AI.AiSettings;
 import main.java.Recipe.Ingredient;
+import main.java.Recipe.Quantity;
 import main.java.Recipe.Recipe;
 import main.java.Recipe.RecipeCategory;
 
@@ -177,9 +178,14 @@ public final class UIComponents {
      * @param recipe 表示するレシピ
      */
     public static void updateDetailArea(JEditorPane area, Recipe recipe) {
-        String ings = recipe.getIngredients().stream()
-                .map(Ingredient::getName)
-                .collect(Collectors.joining(", "));
+        // 食材は1行に1つ、分量があれば「・鶏もも　200g」のように並べる
+        StringBuilder ings = new StringBuilder();
+        for (Ingredient ing : recipe.getIngredients()) {
+            Quantity q = recipe.getQuantity(ing);
+            if (ings.length() > 0) ings.append("<br>");
+            ings.append("・").append(escapeHtml(ing.getName()));
+            if (!q.isEmpty()) ings.append("　").append(escapeHtml(q.toString()));
+        }
         String categories = recipe.getCategories().stream()
                 .map(RecipeCategory::getDisplayName)
                 .collect(Collectors.joining(", "));
@@ -204,7 +210,7 @@ public final class UIComponents {
                     : "<a href=\"" + escapeAttr(url) + "\" style=\"color: " + toHex(link) + ";\">"
                       + escapeHtml(url) + "</a>")
                 + "<br><br>"
-                + "<b>【必要食材】</b><br>" + escapeHtml(ings)
+                + "<b>【必要食材】</b><br>" + ings
                 + "</body></html>";
         area.setText(html);
         area.setCaretPosition(0);

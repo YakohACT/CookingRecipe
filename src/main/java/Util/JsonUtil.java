@@ -92,6 +92,25 @@ public final class JsonUtil {
     }
 
     /**
+     * "key":"value" または "key":123 形式の値を文字列として取り出すメソッド(最初に見つかったキーが対象)
+     * AIが数量を数値(200)で返した場合にも文字列として受け取るために使う
+     * @param json 検索対象のJSON
+     * @param key  キー名
+     * @return 文字列値は unescape 済みの値、数値/真偽値は表記そのまま。キーが無い/null/配列/オブジェクトの場合は null
+     */
+    public static String extractScalar(String json, String key) {
+        if (json == null) return null;
+        int valStart = findValueStart(json, key, 0);
+        if (valStart < 0) return null;
+        if (json.charAt(valStart) == '"') return extractString(json, key);
+        int end = valStart;
+        while (end < json.length() && ",}] \t\r\n".indexOf(json.charAt(end)) < 0) end++;
+        String literal = json.substring(valStart, end);
+        if (literal.isEmpty() || literal.equals("null") || literal.startsWith("{") || literal.startsWith("[")) return null;
+        return literal;
+    }
+
+    /**
      * "key":["v1","v2",…] 形式の文字列配列を取り出すメソッド
      * @param json 検索対象のJSON
      * @param key  キー名

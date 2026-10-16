@@ -19,7 +19,7 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
     private static final String API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
     @Override
-    public String[] generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
+    public RecipeSuggestion generateRecipe(String apiKey, String modelName, String url, List<String> ingredientNames) throws Exception {
         String prompt = buildPrompt(url, ingredientNames);
         String safePrompt = JsonUtil.escape(prompt);
 
@@ -38,14 +38,22 @@ public class GeminiProvider extends AbstractRecipeAIProvider {
                      .append(safeUrl).append("\"}}");
         }
 
-        // 構造化出力で {title, ingredients[]} のJSONを必ず返させ、温度を下げて安定化する
+        // 構造化出力で {title, ingredients[{name, amount, unit}]} のJSONを必ず返させ、温度を下げて安定化する
         String generationConfig = "\"generationConfig\":{"
                 + "\"responseMimeType\":\"application/json\","
                 + "\"responseSchema\":{"
                 +   "\"type\":\"OBJECT\","
                 +   "\"properties\":{"
                 +     "\"title\":{\"type\":\"STRING\"},"
-                +     "\"ingredients\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"STRING\"}}"
+                +     "\"ingredients\":{\"type\":\"ARRAY\",\"items\":{"
+                +       "\"type\":\"OBJECT\","
+                +       "\"properties\":{"
+                +         "\"name\":{\"type\":\"STRING\"},"
+                +         "\"amount\":{\"type\":\"STRING\"},"
+                +         "\"unit\":{\"type\":\"STRING\"}"
+                +       "},"
+                +       "\"required\":[\"name\",\"amount\",\"unit\"]"
+                +     "}}"
                 +   "},"
                 +   "\"required\":[\"title\",\"ingredients\"]"
                 + "},"

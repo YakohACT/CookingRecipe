@@ -1,6 +1,7 @@
 package main.java.Recipe;
 
 import main.java.AI.RecipeAIService;
+import main.java.AI.RecipeSuggestion;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -9,8 +10,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -141,8 +144,8 @@ public final class BatchUrlImporter {
 
             Status finalStatus = Status.FAILED;
             try {
-                String[] result = aiService.suggestRecipe(url, master.getAllIngredientNames());
-                Recipe recipe = buildRecipe(result, url, master);
+                RecipeSuggestion suggestion = aiService.suggestRecipe(url, master.getAllIngredientNames());
+                Recipe recipe = toRecipe(suggestion, url, master);
                 if (recipe != null) {
                     recipeList.addRecipe(recipe);
                     existingUrls.add(url); // 後続でこのURLが再出現しても二重登録されないよう即時反映
@@ -166,18 +169,25 @@ public final class BatchUrlImporter {
     }
 
     /**
-     * AIからの回答を処理するメソッド
-     * @param result AIからの戻り値
-     * @param url    元のURL
-     * @param master 食材マスタ
-     * @return 構築された Recipe。検出失敗時は null
+     * AIの提案をレシピに変換するメソッド(URL一括取込とレシピ登録画面のAI自動提案で共通)
+     * 未知の食材は OTHER カテゴリで食材マスタに追加し、同じ食材は1つにまとめる(分量は先に出てきた方)
+     * @param suggestion AIが提案したレシピ
+     * @param url        元のURL
+     * @param master     食材マスタ
+     * @return 構築された Recipe(カテゴリーは OTHER)。タイトルが空/食材が0件なら null
      */
-    private static Recipe buildRecipe(String[] result, String url, IngredientMaster master) {
-        String title = result[0].trim();
-        // 未知の食材は OTHER カテゴリで自動的にマスタに追加される
-        ArrayList<Ingredient> matched = master.resolveAll(result[1]);
+    public static Recipe toRecipe(RecipeSuggestion suggestion, String url, IngredientMaster master) {
+        String title = suggestion.title.trim();
+        ArrayList<Ingredient> matched = new ArrayList<>();
+        Map<String, Quantity> quantities = new LinkedHashMap<>();
+        for (RecipeSuggestion.Item item : suggestion.ingredients) {
+            Ingredient ing = master.addIngredient(item.name);
+            if (ing == null || matched.contains(ing)) continue;
+            matched.add(ing);
+            quantities.put(ing.getName(), Quantity.of(item.amount, item.unit));
+        }
 
         if (title.isEmpty() || matched.isEmpty()) return null;
-        return new Recipe(title, url, matched, EnumSet.of(RecipeCategory.OTHER));
+        return new Recipe(title, url, matched, quantities, EnumSet.of(RecipeCategory.OTHER));
     }
 }

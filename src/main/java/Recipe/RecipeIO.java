@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * レシピのJSON入出力を担うユーティリティ
@@ -21,11 +23,13 @@ import java.util.List;
  *       "title": "親子丼",
  *       "url": "https://...",
  *       "categories": ["RICE", "EGG", "MEAT", "WASHOKU"],
- *       "ingredients": ["鶏もも", "たまご", "玉ねぎ"]
+ *       "ingredients": ["鶏もも", "たまご", "玉ねぎ"],
+ *       "quantities": [{"name": "鶏もも", "amount": "200", "unit": "g"}]
  *     }
  *   ]
  * }
  * </pre>
+ * quantities は分量を指定した食材だけを持つ。quantities の無い古いファイルも読み込める
  */
 public final class RecipeIO {
 
@@ -80,6 +84,17 @@ public final class RecipeIO {
             if (k > 0) sb.append(", ");
             sb.append("\"").append(JsonUtil.escape(r.getIngredients().get(k).getName())).append("\"");
         }
+        sb.append("],\n");
+        sb.append(indent).append("  \"quantities\": [");
+        int q = 0;
+        for (Ingredient ing : r.getIngredients()) {
+            Quantity quantity = r.getQuantity(ing);
+            if (quantity.isEmpty()) continue;
+            if (q++ > 0) sb.append(", ");
+            sb.append("{\"name\": \"").append(JsonUtil.escape(ing.getName()))
+              .append("\", \"amount\": \"").append(JsonUtil.escape(quantity.getAmount()))
+              .append("\", \"unit\": \"").append(JsonUtil.escape(quantity.getUnit())).append("\"}");
+        }
         sb.append("]\n");
         sb.append(indent).append("}");
         return sb.toString();
@@ -123,6 +138,13 @@ public final class RecipeIO {
             Ingredient ing = im.addIngredient(name);
             if (ing != null) ings.add(ing);
         }
-        return new Recipe(title, url, ings, cats);
+
+        Map<String, Quantity> quantities = new LinkedHashMap<>();
+        for (String q : JsonUtil.extractObjectArray(obj, "quantities")) {
+            String name = JsonUtil.extractString(q, "name");
+            if (name == null) continue;
+            quantities.put(name.trim(), Quantity.of(JsonUtil.extractString(q, "amount"), JsonUtil.extractString(q, "unit")));
+        }
+        return new Recipe(title, url, ings, quantities, cats);
     }
 }

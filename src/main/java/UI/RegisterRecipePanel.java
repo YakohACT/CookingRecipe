@@ -1,29 +1,42 @@
 package main.java.UI;
 
 import main.java.SwingMain;
+import main.java.AI.RecipeSuggestion;
+import main.java.Recipe.BatchUrlImporter;
 import main.java.Recipe.Ingredient;
 import main.java.Recipe.IngredientCategory;
+import main.java.Recipe.Quantity;
 import main.java.Recipe.Recipe;
 import main.java.Recipe.RecipeCategory;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * レシピ登録/編集画面パネル（AI自動提案機能付き）。
  * editTarget が null なら新規登録、非nullなら既存レシピの更新として動作する
+ * 使用する食材は表で管理し、食材ごとに数量と単位(分量)を入力できる
  */
 public class RegisterRecipePanel extends JPanel {
+
+    private static final int COL_INGREDIENT = 0;
+    private static final int COL_AMOUNT = 1;
+    private static final int COL_UNIT = 2;
 
     private final SwingMain owner;
     private final Recipe editTarget;
     private final JTextField titleField = UIComponents.createStyledTextField();
     private final JTextField urlField = UIComponents.createStyledTextField();
     private final JList<RecipeCategory> categoryList = new JList<>(RecipeCategory.values());
-    private final DefaultListModel<Ingredient> selectedListModel = new DefaultListModel<>();
+    /** 使用する食材の表(食材 / 数量 / 単位) */
+    private final DefaultTableModel selectedModel;
+    private final JTable selectedTable;
 
     /**
      * 新規登録モードで構築する。
@@ -59,9 +72,13 @@ public class RegisterRecipePanel extends JPanel {
         DefaultListModel<Ingredient> masterListModel = new DefaultListModel<>();
         JList<Ingredient> masterIngList = new JList<>(masterListModel);
 
-        JList<Ingredient> selectedIngList = new JList<>(selectedListModel);
-        // Ctrl/Shift で複数選択 → 一度に解除できる
-        selectedIngList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        selectedModel = new DefaultTableModel(new String[]{"食材", "数量", "単位"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) {
+                return col != COL_INGREDIENT;
+            }
+        };
+        selectedTable = buildSelectedTable();
 
         catCombo.addActionListener(e -> {
             IngredientCategory cat = (IngredientCategory) catCombo.getSelectedItem();
@@ -76,17 +93,16 @@ public class RegisterRecipePanel extends JPanel {
         JButton btnAdd = new JButton("選択した食材を追加");
         btnAdd.addActionListener(e -> {
             Ingredient selected = masterIngList.getSelectedValue();
-            if (selected != null && !selectedListModel.contains(selected)) {
-                selectedListModel.addElement(selected);
-            }
+            if (selected != null) addIngredientRow(selected, Quantity.EMPTY);
         });
 
         JButton btnRemove = new JButton("選択した食材を解除");
         btnRemove.addActionListener(e -> {
-            int[] indices = selectedIngList.getSelectedIndices();
+            stopEditing();
+            int[] rows = selectedTable.getSelectedRows();
             // 末尾から削除すると先のインデックスが崩れない
-            for (int i = indices.length - 1; i >= 0; i--) {
-                selectedListModel.remove(indices[i]);
+            for (int i = rows.length - 1; i >= 0; i--) {
+                selectedModel.removeRow(rows[i]);
             }
         });
 
@@ -120,8 +136,9 @@ public class RegisterRecipePanel extends JPanel {
         UIComponents.addLeftAligned(form, btnAdd);
 
         form.add(Box.createRigidArea(new Dimension(0, 20)));
-        UIComponents.addLeftAligned(form, new JLabel("使用する食材 (Ctrl+クリックで複数選択):"));
-        JScrollPane sScroll = new JScrollPane(selectedIngList);
+        UIComponents.addLeftAligned(form, new JLabel(
+                "使用する食材と分量 (数量・単位のセルをクリックして入力。単位は候補から選ぶか直接入力):"));
+        JScrollPane sScroll = new JScrollPane(selectedTable);
         sScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         form.add(sScroll);
         UIComponents.addLeftAligned(form, btnRemove);
@@ -138,15 +155,69 @@ public class RegisterRecipePanel extends JPanel {
     }
 
     /**
+     * 使用する食材の表を構築する。
+     * 単位列は候補から選べる編集可能なコンボにし、Ctrl/Shift で複数行を選択して一度に解除できる
+     * @return 構築した JTable
+     */
+    private JTable buildSelectedTable() {
+        JTable table = new JTable(selectedModel);
+        table.setRowHeight(24);
+        table.setFont(Theme.FONT_MAIN);
+        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        table.getTableHeader().setReorderingAllowed(false);
+        // 入力途中で別の部品をクリックしても、入力中の値を確定させる
+        table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+        table.setPreferredScrollableViewportSize(new Dimension(450, 200));
+
+        JComboBox<String> unitEditor = new JComboBox<>(Quantity.COMMON_UNITS.toArray(new String[0]));
+        unitEditor.setEditable(true);
+        table.getColumnModel().getColumn(COL_UNIT).setCellEditor(new DefaultCellEditor(unitEditor));
+
+        table.getColumnModel().getColumn(COL_INGREDIENT).setPreferredWidth(240);
+        table.getColumnModel().getColumn(COL_AMOUNT).setPreferredWidth(90);
+        table.getColumnModel().getColumn(COL_UNIT).setPreferredWidth(120);
+        return table;
+    }
+
+    /**
+     * 使用する食材の表に1行追加する。既に同じ食材がある場合は何もしない。
+     * @param ing      追加する食材
+     * @param quantity その食材の分量
+     */
+    private void addIngredientRow(Ingredient ing, Quantity quantity) {
+        for (int i = 0; i < selectedModel.getRowCount(); i++) {
+            if (ing.equals(selectedModel.getValueAt(i, COL_INGREDIENT))) return;
+        }
+        selectedModel.addRow(new Object[]{ing, quantity.getAmount(), quantity.getUnit()});
+    }
+
+    /**
+     * 表で入力中のセルがあれば値を確定させる。
+     */
+    private void stopEditing() {
+        if (selectedTable.isEditing()) selectedTable.getCellEditor().stopCellEditing();
+    }
+
+    /**
+     * 使用する食材の表を指定レシピの食材と分量で置き換える。
+     * @param r 表示するレシピ
+     */
+    private void showIngredients(Recipe r) {
+        stopEditing();
+        selectedModel.setRowCount(0);
+        for (Ingredient ing : r.getIngredients()) {
+            addIngredientRow(ing, r.getQuantity(ing));
+        }
+    }
+
+    /**
      * 編集対象レシピの内容をフォーム要素に流し込む。
      * @param r 編集対象のレシピ
      */
     private void prefillFromRecipe(Recipe r) {
         titleField.setText(r.getTitle());
         urlField.setText(r.getUrl());
-        for (Ingredient ing : r.getIngredients()) {
-            if (!selectedListModel.contains(ing)) selectedListModel.addElement(ing);
-        }
+        showIngredients(r);
         // カテゴリーJListの選択インデックスを同期
         RecipeCategory[] all = RecipeCategory.values();
         EnumSet<RecipeCategory> cats = r.getCategories();
@@ -172,6 +243,8 @@ public class RegisterRecipePanel extends JPanel {
         titleLabel.setFont(Theme.FONT_TITLE);
         headerPanel.add(titleLabel, BorderLayout.WEST);
         headerPanel.add(btnAi, BorderLayout.EAST);
+        // ウィンドウを広げたときにヘッダーが縦に伸びて AIボタンが巨大化しないよう高さを固定する
+        headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, headerPanel.getPreferredSize().height));
         return headerPanel;
     }
 
@@ -184,9 +257,9 @@ public class RegisterRecipePanel extends JPanel {
         btnAi.setText("生成中...");
         btnAi.setEnabled(false);
 
-        SwingWorker<String[], Void> worker = new SwingWorker<>() {
+        SwingWorker<RecipeSuggestion, Void> worker = new SwingWorker<>() {
             @Override
-            protected String[] doInBackground() throws Exception {
+            protected RecipeSuggestion doInBackground() throws Exception {
                 return owner.getAiSettings().createService().suggestRecipe(
                         urlField.getText().trim(), owner.getIngredientMaster().getAllIngredientNames());
             }
@@ -213,26 +286,19 @@ public class RegisterRecipePanel extends JPanel {
     }
 
     /**
-     * AIの返したレシピをフォームに反映する。
-     * タイトルが空、または食材マスタとマッチする食材が0個の場合は
-     * 「検出できなかった」と判断し、フォームには一切手を加えず false を返す。
-     * @param result AIから返ってきた {タイトル, "食材1,食材2,…"} 配列
+     * AIの返したレシピ(タイトル・食材・分量)をフォームに反映する。
+     * タイトルが空、または食材が0個の場合は「検出できなかった」と判断し、
+     * フォームには一切手を加えず false を返す。カテゴリーの選択は変更しない。
+     * @param suggestion AIが提案したレシピ
      * @return 反映に成功すれば true、検出失敗時は false
      */
-    private boolean applyAiResult(String[] result) {
-        String aiTitle = result[0].trim();
+    private boolean applyAiResult(RecipeSuggestion suggestion) {
         // AIが未知の食材を返した場合は OTHER カテゴリで自動的にマスタに追加される
-        ArrayList<Ingredient> matched = owner.getIngredientMaster().resolveAll(result[1]);
+        Recipe suggested = BatchUrlImporter.toRecipe(suggestion, urlField.getText().trim(), owner.getIngredientMaster());
+        if (suggested == null) return false;
 
-        if (aiTitle.isEmpty() || matched.isEmpty()) {
-            return false;
-        }
-
-        titleField.setText(aiTitle);
-        selectedListModel.clear();
-        for (Ingredient ing : matched) {
-            selectedListModel.addElement(ing);
-        }
+        titleField.setText(suggested.getTitle());
+        showIngredients(suggested);
         return true;
     }
 
@@ -241,16 +307,23 @@ public class RegisterRecipePanel extends JPanel {
      * 終了後はウェルカム画面に戻る。
      */
     private void submitRecipe() {
+        stopEditing();
         String title = titleField.getText().trim();
         String url = urlField.getText().trim();
 
-        if (title.isEmpty() || url.isEmpty() || selectedListModel.isEmpty()) {
+        if (title.isEmpty() || url.isEmpty() || selectedModel.getRowCount() == 0) {
             JOptionPane.showMessageDialog(this, "入力されていない箇所があります", "入力エラー", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         ArrayList<Ingredient> ings = new ArrayList<>();
-        for (int i = 0; i < selectedListModel.size(); i++) ings.add(selectedListModel.getElementAt(i));
+        Map<String, Quantity> quantities = new LinkedHashMap<>();
+        for (int i = 0; i < selectedModel.getRowCount(); i++) {
+            Ingredient ing = (Ingredient) selectedModel.getValueAt(i, COL_INGREDIENT);
+            ings.add(ing);
+            quantities.put(ing.getName(), Quantity.of(
+                    (String) selectedModel.getValueAt(i, COL_AMOUNT), (String) selectedModel.getValueAt(i, COL_UNIT)));
+        }
 
         // 未選択の場合は Recipe 側で OTHER になる
         EnumSet<RecipeCategory> categories = EnumSet.noneOf(RecipeCategory.class);
@@ -258,13 +331,13 @@ public class RegisterRecipePanel extends JPanel {
             categories.add(cat);
         }
 
+        Recipe recipe = new Recipe(title, url, ings, quantities, categories);
         if (editTarget == null) {
-            owner.getAllRecipeList().addRecipe(new Recipe(title, url, ings, categories));
+            owner.getAllRecipeList().addRecipe(recipe);
             JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を登録しました");
         } else {
-            Recipe updated = new Recipe(title, url, ings, categories);
-            updated.setId(editTarget.getId());
-            owner.getAllRecipeList().updateRecipe(updated);
+            recipe.setId(editTarget.getId());
+            owner.getAllRecipeList().updateRecipe(recipe);
             JOptionPane.showMessageDialog(this, "レシピ「" + title + "」を更新しました");
         }
         owner.showWelcome();
