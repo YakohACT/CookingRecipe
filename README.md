@@ -153,11 +153,11 @@ APIを用いるため、**料金に注意**\
 
 ![RMP_AI_OLLAMA.png](Photo/RMP_AI_OLLAMA.png)
 Ollamaはこんな画面\
-Ollamaを起動していれば、入っているAIモデルが全部選べるようになります。\
+Ollamaを起動していれば、入っているAIモデルが全部選べるようになります。
 
 ![RMP_AI_LLAMACPP.png](Photo/RMP_AI_LLAMACPP.png)
 llama.cppはこんな画面\
-llamaを起動して、URLを入力すれば、AIモデルが選べるようになります。\
+llamaを起動して、URLを入力すれば、AIモデルが選べるようになります。
 
 ### レシピ管理
 ![RMP_RegistIngredient.png](Photo/RMP_RegistIngredient.png)
